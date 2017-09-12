@@ -7,32 +7,45 @@ class Vector {
 
 class GameObject {
     constructor(position, velocity, size) {
-        this.position = position;
-        this.velocity = velocity;
-        this.size = size;
+        this.position = position ? position : Vector(0, 0);
+        this.velocity = velocity ? velocity : Vector(0, 0);
+        this.size = size ? size : Vector(0, 0);
+    }
+}
+
+const Role = {
+    Server: 0,
+    Client: 1
+};
+
+class GameState {
+    constructor(role) {
+        this.constants = {
+            dimensions: new Vector(500.0, 360.0),
+            ballSpeed: 50,
+            maxReflect: Math.PI / 3.0
+        };
+
+        this.role = role;
+        this.paddle1 = new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50));
+        this.paddle2 = new GameObject(new Vector(this.constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
+        this.ball = new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10));
+        this.score = { a: 0, b: 0 };
+        this.simulateBall = true;
     }
 }
 
 var mousePos = new Vector(0, 0);
-const dimensions = new Vector(500.0, 360.0);
-const ballSpeed = 50;
-const maxReflect = Math.PI / 3.0;
-
-var gameState = {
-    paddle1: new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50)),
-    paddle2: new GameObject(new Vector(dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50)),
-    ball: new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10)),
-    score: { a: 0, b: 0 },
-    simulateBall: true
-};
+var gameState = new GameState(Role.Server);
 
 function initializeGame() {
     restoreBallState(true);
 }
 
 function updateGameState(dt) {
-    var canvas = document.getElementById("canvas");
-    var topOffset = canvas.offsetTop;
+    const dimensions = gameState.constants.dimensions;
+    const canvas = document.getElementById("canvas");
+    const topOffset = canvas.offsetTop;
 
     // Update the paddle.
     var newPos = mousePos.y - topOffset - gameState.paddle1.size.y / 2.0;
@@ -81,6 +94,9 @@ function updateGameState(dt) {
 }
 
 function reflect(paddle, ball, left) {
+    const maxReflect = gameState.constants.maxReflect;
+    const ballSpeed = gameState.constants.ballSpeed;
+
     const paddleY = paddle.position.y + paddle.size.y / 2.0;
     const ballY = gameState.ball.position.y + ball.size.y / 2.0;
     const ratio = (paddleY - ballY) / (paddle.size.y / 2.0);
@@ -97,6 +113,9 @@ function reflect(paddle, ball, left) {
 }
 
 function restoreBallState(left) {
+    const dimensions = gameState.constants.dimensions;
+    const ballSpeed = gameState.constants.ballSpeed;
+
     const vx = ballSpeed * Math.cos(Math.PI / 4.0);
     const vy = ballSpeed * Math.sin(Math.PI / 4.0);
     gameState.ball.position = new Vector(dimensions.x / 2.0, dimensions.y * 0.3);
@@ -105,6 +124,8 @@ function restoreBallState(left) {
 }
 
 function drawGame() {
+    const dimensions = gameState.constants.dimensions;
+
     canvas = document.getElementById("canvas");
     var context = canvas.getContext("2d");
     context.fillStyle = "black";
@@ -150,7 +171,9 @@ function collides(obj1, obj2) {
 }
 
 function gameLoop(time) {
-    updateGameState(0.04);
+    if (gameState.role == Role.Server) {
+        updateGameState(0.04);
+    }
     drawGame();
 }
 
