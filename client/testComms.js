@@ -12,10 +12,10 @@ function testComms() {
     }
 
     ws.onopen = function(event) {
-        function sendMessage() {
-            ws.send("testing...");
-        }
-        setInterval(sendMessage, 500);
+        // function sendMessage() {
+        //     ws.send("testing...");
+        // }
+        // setInterval(sendMessage, 500);
     }
 
     ws.onclose = function(event) {

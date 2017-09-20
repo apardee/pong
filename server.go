@@ -3,24 +3,49 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-func runWithConnection(conn *websocket.Conn) {
+type matchMaker struct {
+	connInput chan *websocket.Conn
+}
+
+type match struct {
+	host   *websocket.Conn
+	client *websocket.Conn
+}
+
+func startMatch(m *match) {
+	log.Println("Starting a match...")
 	for {
-		_, bytes, err := conn.ReadMessage()
-		if err == nil {
-			if bytes != nil {
-				log.Println(string(bytes))
-			}
+		m.host.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
+		m.client.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
+		<-time.After(time.Second * 1)
+	}
+}
+
+func makeMatches(mm *matchMaker) {
+	var pending *websocket.Conn
+	for {
+		conn := <-mm.connInput
+		log.Println("received connection")
+		if pending == nil {
+			log.Println("received connection")
+			pending = conn
 		} else {
-			log.Println(err)
+			log.Println("received connection")
+			m := match{host: pending, client: conn}
+			go startMatch(&m)
+			pending = nil
 		}
 	}
 }
 
-func receiveSocket(w http.ResponseWriter, r *http.Request) {
+var mm matchMaker
+
+func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received a request...")
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -35,7 +60,22 @@ func receiveSocket(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	} else {
 		log.Println("Upgraded a request...")
-		runWithConnection(conn)
+		mm.connInput <- conn
+	}
+}
+
+// Test Logic
+
+func runWithConnection(conn *websocket.Conn) {
+	for {
+		_, bytes, err := conn.ReadMessage()
+		if err == nil {
+			if bytes != nil {
+				log.Println(string(bytes))
+			}
+		} else {
+			log.Println(err)
+		}
 	}
 }
 
@@ -55,7 +95,9 @@ func runConnection() {
 }
 
 func main() {
+	mm = matchMaker{connInput: make(chan *websocket.Conn)}
 	// go runConnection()
-	http.HandleFunc("/", receiveSocket)
+	go makeMatches(&mm)
+	http.HandleFunc("/", receiveConnection)
 	http.ListenAndServe(":8080", nil)
 }
