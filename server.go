@@ -9,10 +9,13 @@ import (
 
 func runWithConnection(conn *websocket.Conn) {
 	for {
-		// log.Println("Reading a message...")
 		_, bytes, err := conn.ReadMessage()
 		if err == nil {
-			log.Println(string(bytes))
+			if bytes != nil {
+				log.Println(string(bytes))
+			}
+		} else {
+			log.Println(err)
 		}
 	}
 }
@@ -22,15 +25,18 @@ func receiveSocket(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		log.Print(err)
+	} else {
+		log.Println("Upgraded a request...")
+		runWithConnection(conn)
 	}
-
-	log.Println("Upgraded a request...")
-	runWithConnection(conn)
 }
 
 func runConnection() {
@@ -41,7 +47,7 @@ func runConnection() {
 	}
 	for {
 		// log.Println("Sending a message...")
-		if err := conn.WriteMessage(websocket.BinaryMessage, []byte("Test...")); err != nil {
+		if err := conn.WriteMessage(websocket.TextMessage, []byte("Test...")); err != nil {
 			log.Fatal("Failed to write message...", err)
 			break
 		}
@@ -49,7 +55,7 @@ func runConnection() {
 }
 
 func main() {
-	go runConnection()
+	// go runConnection()
 	http.HandleFunc("/", receiveSocket)
 	http.ListenAndServe(":8080", nil)
 }
