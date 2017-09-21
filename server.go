@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,10 +18,51 @@ type match struct {
 
 func startMatch(m *match) {
 	log.Println("Starting a match...")
-	for {
-		m.host.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
-		m.client.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
-		<-time.After(time.Second * 1)
+
+	// for {
+	// 	log.Println("Starting a match...")
+	// 	m.host.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
+	// 	m.client.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
+	// 	<-time.After(time.Second * 1)
+	// }
+
+	stop := make(chan bool)
+	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
+		_, byt, err := conn.ReadMessage()
+		if err != nil {
+			stop <- true
+		} else {
+			out <- byt
+		}
+	}
+
+	hostRead := make(chan []byte)
+	clientRead := make(chan []byte)
+
+	go chanReader(m.host, hostRead)
+	go chanReader(m.client, clientRead)
+
+	// kick it off
+	m.host.WriteMessage(websocket.TextMessage, []byte("start"))
+
+	open := true
+	for open {
+		select {
+		case byt := <-hostRead:
+			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
+				open = false
+			} else {
+				go chanReader(m.host, hostRead)
+			}
+		case byt := <-clientRead:
+			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
+				open = false
+			} else {
+				go chanReader(m.client, clientRead)
+			}
+		case <-stop:
+			open = false
+		}
 	}
 }
 

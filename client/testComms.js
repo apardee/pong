@@ -12,10 +12,7 @@ function testComms() {
     }
 
     ws.onopen = function(event) {
-        // function sendMessage() {
-        //     ws.send("testing...");
-        // }
-        // setInterval(sendMessage, 500);
+        log("connected!");
     }
 
     ws.onclose = function(event) {
@@ -23,6 +20,13 @@ function testComms() {
     }
 
     ws.onmessage = function(event) {
-        log("message!");
+        log(event.data);
+        if (event.data === "start") {
+            ws.send("1");
+        }
+        else {
+            const value = parseInt(event.data);
+            setTimeout(function() { ws.send((value + 1).toString()); }, 200)
+        }
     }
 }
