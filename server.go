@@ -19,13 +19,6 @@ type match struct {
 func startMatch(m *match) {
 	log.Println("Starting a match...")
 
-	// for {
-	// 	log.Println("Starting a match...")
-	// 	m.host.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
-	// 	m.client.WriteMessage(websocket.TextMessage, []byte("Match Ongoing!"))
-	// 	<-time.After(time.Second * 1)
-	// }
-
 	stop := make(chan bool)
 	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
 		_, byt, err := conn.ReadMessage()
