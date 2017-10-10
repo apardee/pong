@@ -13,6 +13,9 @@ function log(message) {
     element.innerText += "\n";
 }
 
+var server = false;
+var position = new Vector(0.0, 0.0);
+
 function runLoop() {
     const canvas = document.getElementById("canvas");
     const context = canvas.getContext("2d");
@@ -20,41 +23,48 @@ function runLoop() {
     context.fillRect(0, 0, 200, 200);
 
     context.fillStyle = "white";
-    context.fillRect(mousePos.x - canvas.offsetLeft, mousePos.y - canvas.offsetTop, 10, 10);
+    if (server) {
+        context.fillRect(mousePos.x - canvas.offsetLeft, mousePos.y - canvas.offsetTop, 10, 10);
+    }
+    else {
+        context.fillRect(position.x - canvas.offsetLeft, position.y - canvas.offsetTop, 10, 10);
+    }
 
     window.requestAnimationFrame(runLoop);
 }
 
 function testDraw() {
-    // log("connecting...");
-    // let ws = new WebSocket("ws://localhost:8080");
-    // ws.onerror = function(event) {
-    //     log("error!");
-    // }
+    log("connecting...");
+    let ws = new WebSocket("ws://localhost:8080");
+    ws.onerror = function(event) {
+        log("error!");
+    }
 
-    // ws.onopen = function(event) {
-    //     log("connected!");
-    // }
+    ws.onopen = function(event) {
+        log("connected!");
+    }
 
-    // ws.onclose = function(event) {
-    //     log("close!");
-    // }
+    ws.onclose = function(event) {
+        log("close!");
+    }
 
-    // ws.onmessage = function(event) {
-    //     log(event.data);
-    //     if (event.data === "start") {
-    //         ws.send("1");
-    //     }
-    //     else {
-    //         const value = parseInt(event.data);
-    //         setTimeout(function() { ws.send((value + 1).toString()); }, 200)
-    //     }
-    // }
+    ws.onmessage = function(event) {
+        if (event.data === "start") {
+            server = true;
+        }
+
+        if (server === false) {
+            let parsed = JSON.parse(event.data);
+            position = parsed;
+        }
+    }
     
     document.onmousemove = function(event) {
         mousePos = new Vector(event.pageX, event.pageY);
+        if (server) {
+            let mp = JSON.stringify(mousePos);
+            ws.send(mp);
+        }
     };
     window.requestAnimationFrame(runLoop);
-
-    log("hello");
 }
