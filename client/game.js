@@ -1,3 +1,9 @@
+function log(message) {
+    let element = document.getElementById("output");
+    element.innerText += message;
+    element.innerText += "\n";
+}
+
 class Vector {
     constructor(x, y) {
         this.x = x;
@@ -13,13 +19,19 @@ class GameObject {
     }
 }
 
+const State = {
+    WaitingPlayer: 0,
+    GameActive: 1,
+    GameEnded: 2
+};
+
 const Role = {
     Server: 0,
     Client: 1
 };
 
 class GameState {
-    constructor(role) {
+    constructor(role, state) {
         this.constants = {
             dimensions: new Vector(500.0, 360.0),
             ballSpeed: 50,
@@ -27,6 +39,8 @@ class GameState {
         };
 
         this.role = role;
+        this.state = state;
+
         this.paddle1 = new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50));
         this.paddle2 = new GameObject(new Vector(this.constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
         this.ball = new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10));
@@ -36,7 +50,7 @@ class GameState {
 }
 
 var mousePos = new Vector(0, 0);
-var gameState = new GameState(Role.Server);
+var gameState = new GameState(Role.Server, State.WaitingPlayer);
 
 function initializeGame() {
     restoreBallState(true);
@@ -175,6 +189,36 @@ function gameLoop(time) {
         updateGameState(0.04);
     }
     drawGame();
+}
+
+function setupGame() {
+    gameState.state = State.WaitingPlayer;
+
+    let ws = new WebSocket("ws://localhost:8080");
+    ws.onerror = function(event) {
+        log("error!");
+    }
+    ws.onopen = function(event) {
+        log("connected!");
+    }
+    ws.onclose = function(event) {
+        log("close!");
+    }
+    ws.onmessage = function(event) {
+        log(event.data);
+        if (event.data === "start") {
+            ws.send("1");
+        }
+        else {
+            const value = parseInt(event.data);
+            setTimeout(function() { ws.send((value + 1).toString()); }, 200)
+        }
+
+        if (gameState.state === State.WaitingPlayer) {
+            gameState.state = State.GameActive;
+            runGame();
+        }
+    }
 }
 
 function runGame() {
