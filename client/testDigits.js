@@ -5,8 +5,6 @@ class Vector {
     }
 }
 
-let mousePos = new Vector(0.0, 0.0);
-
 function log(message) {
     let element = document.getElementById("output");
     element.innerText += message;
@@ -33,32 +31,7 @@ function runLoop() {
     window.requestAnimationFrame(runLoop);
 }
 
-function testDraw() {
-    log("connecting...");
-    let ws = new WebSocket("ws://localhost:8080");
-    ws.onerror = function(event) {
-        log("error!");
-    }
-
-    ws.onopen = function(event) {
-        log("connected!");
-    }
-
-    ws.onclose = function(event) {
-        log("close!");
-    }
-
-    ws.onmessage = function(event) {
-        if (event.data === "start") {
-            server = true;
-        }
-
-        if (server === false) {
-            let parsed = JSON.parse(event.data);
-            position = parsed;
-        }
-    }
-    
+function testDigits() {
     document.onmousemove = function(event) {
         mousePos = new Vector(event.pageX, event.pageY);
         if (server) {
