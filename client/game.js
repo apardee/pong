@@ -4,6 +4,24 @@ function log(message) {
     element.innerText += "\n";
 }
 
+const MessageType = {
+    MatchStart: "MatchStart",
+    InputTx: "InputTx",
+    GameStateTx: "GameStateTx"
+};
+
+const State = {
+    WaitingPlayer: 0,
+    GameActive: 1,
+    GameEnded: 2
+};
+
+const Role = {
+    Unassigned: "Unassigned",
+    Host: "Host",
+    Client: "Client"
+};
+
 class Vector {
     constructor(x, y) {
         this.x = x;
@@ -18,17 +36,6 @@ class GameObject {
         this.size = size ? size : Vector(0, 0);
     }
 }
-
-const State = {
-    WaitingPlayer: 0,
-    GameActive: 1,
-    GameEnded: 2
-};
-
-const Role = {
-    Server: 0,
-    Client: 1
-};
 
 class GameState {
     constructor(role, state) {
@@ -50,7 +57,8 @@ class GameState {
 }
 
 var mousePos = new Vector(0, 0);
-var gameState = new GameState(Role.Server, State.WaitingPlayer);
+var gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
+var ws = null;
 
 function initializeGame() {
     restoreBallState(true);
@@ -185,8 +193,17 @@ function collides(obj1, obj2) {
 }
 
 function gameLoop(time) {
-    if (gameState.role == Role.Server) {
+    if (gameState.role == Role.Host) {
         updateGameState(0.04);
+        let message = {
+            type: MessageType.GameStateTx,
+            payload: {
+
+            }
+        }
+    }
+    else {
+        // transmit mouse position
     }
     drawGame();
 }
@@ -194,7 +211,7 @@ function gameLoop(time) {
 function setupGame() {
     gameState.state = State.WaitingPlayer;
 
-    let ws = new WebSocket("ws://localhost:8080");
+    ws = new WebSocket("ws://localhost:8080");
     ws.onerror = function(event) {
         log("error!");
     }
@@ -205,18 +222,18 @@ function setupGame() {
         log("close!");
     }
     ws.onmessage = function(event) {
-        log(event.data);
-        if (event.data === "start") {
-            ws.send("1");
-        }
-        else {
-            const value = parseInt(event.data);
-            setTimeout(function() { ws.send((value + 1).toString()); }, 200)
-        }
-
-        if (gameState.state === State.WaitingPlayer) {
-            gameState.state = State.GameActive;
+        log("rx: " + event.data);
+        let message = JSON.parse(event.data);
+        if (message.type == MessageType.MatchStart) {
+            log("got a match start message...");
+            gameState.role = message.payload.role;
             runGame();
+        }
+        else if (message.type == MessageType.InputTx) {
+            log("got an input message...");
+        }
+        else if (message.type == MessageType.GameStateTx) {
+            log("got a game state message...");
         }
     }
 }
