@@ -36,7 +36,8 @@ func startMatch(m *match) {
 	go chanReader(m.client, clientRead)
 
 	// kick it off
-	m.host.WriteMessage(websocket.TextMessage, []byte("start"))
+	m.host.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"))
+	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
 
 	open := true
 	for open {
