@@ -192,15 +192,31 @@ function collides(obj1, obj2) {
     return true;
 }
 
+function packGameStateMessage(state) {
+    return {
+        type: MessageType.GameStateTx,
+        payload: {
+            paddle1: state.paddle1.position,
+            paddle2: state.paddle2.position,
+            ball: state.ball.position,
+            score: state.score,
+        }
+    }
+}
+
+function unpackGameStateMessage(packed, state) {
+    state.paddle1.position = packed.paddle1;
+    state.paddle2.position = packed.paddle2;
+    state.ball.position = packed.ball;
+    state.score = packed.score;
+}
+
 function gameLoop(time) {
     if (gameState.role == Role.Host) {
         updateGameState(0.04);
-        let message = {
-            type: MessageType.GameStateTx,
-            payload: {
-
-            }
-        }
+        let message = packGameStateMessage(gameState);
+        let messageData = JSON.stringify(message);
+        ws.send(messageData);
     }
     else {
         // transmit mouse position
@@ -210,7 +226,6 @@ function gameLoop(time) {
 
 function setupGame() {
     gameState.state = State.WaitingPlayer;
-
     ws = new WebSocket("ws://localhost:8080");
     ws.onerror = function(event) {
         log("error!");
@@ -222,10 +237,9 @@ function setupGame() {
         log("close!");
     }
     ws.onmessage = function(event) {
-        log("rx: " + event.data);
+        // log("rx: " + event.data);
         let message = JSON.parse(event.data);
         if (message.type == MessageType.MatchStart) {
-            log("got a match start message...");
             gameState.role = message.payload.role;
             runGame();
         }
@@ -233,7 +247,7 @@ function setupGame() {
             log("got an input message...");
         }
         else if (message.type == MessageType.GameStateTx) {
-            log("got a game state message...");
+            unpackGameStateMessage(message.payload, gameState);
         }
     }
 }
