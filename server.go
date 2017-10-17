@@ -19,13 +19,15 @@ type match struct {
 func startMatch(m *match) {
 	log.Println("Starting a match...")
 
-	stop := make(chan bool)
+	finished := false
 	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
-		_, byt, err := conn.ReadMessage()
-		if err != nil {
-			stop <- true
-		} else {
-			out <- byt
+		for !finished {
+			_, byt, err := conn.ReadMessage()
+			if err != nil {
+				finished = true
+			} else {
+				out <- byt
+			}
 		}
 	}
 
@@ -35,27 +37,21 @@ func startMatch(m *match) {
 	go chanReader(m.host, hostRead)
 	go chanReader(m.client, clientRead)
 
-	// kick it off
+	// Kick off the match by sending the `MatchStart` message through both connections.
 	m.host.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"))
 	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
 
-	open := true
-	for open {
+	// Once started, just relay messages between the two.
+	for !finished {
 		select {
 		case byt := <-hostRead:
 			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
-				open = false
-			} else {
-				go chanReader(m.host, hostRead)
+				finished = true
 			}
 		case byt := <-clientRead:
 			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
-				open = false
-			} else {
-				go chanReader(m.client, clientRead)
+				finished = true
 			}
-		case <-stop:
-			open = false
 		}
 	}
 }
@@ -99,7 +95,6 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 // Test Logic
-
 func runWithConnection(conn *websocket.Conn) {
 	for {
 		_, bytes, err := conn.ReadMessage()
