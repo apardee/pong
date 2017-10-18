@@ -42,7 +42,8 @@ class GameState {
         this.constants = {
             dimensions: new Vector(500.0, 360.0),
             ballSpeed: 50,
-            maxReflect: Math.PI / 3.0
+            maxReflect: Math.PI / 3.0,
+            digitContext: BlockDigit.createContext(40, 80, 10)
         };
 
         this.role = role;
@@ -161,17 +162,20 @@ function drawGame() {
         drawObject(context, gameState.ball);
     }
 
-    context.font = "30px monospace";
-    context.fillText(gameState.score.a.toString(), dimensions.x / 2.0 - 30.0, 30.0);
-    context.fillText(gameState.score.b.toString(), dimensions.x / 2.0 + 12.0, 30.0);
-
     context.strokeStyle = "white";
+    context.save();
+    BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, gameState.constants.digitContext);
+    BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, gameState.constants.digitContext);
+    context.restore();
+
     context.lineWidth = 10;
+    context.save();
     context.beginPath();
     context.setLineDash([8, 8]);
     context.moveTo(dimensions.x / 2.0, 0.0);
     context.lineTo(dimensions.x / 2.0, dimensions.y);
     context.stroke();
+    context.restore();
 }
 
 function drawObject(context, object) {
