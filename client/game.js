@@ -37,41 +37,32 @@ class GameObject {
     }
 }
 
+let constants = {
+    dimensions: new Vector(500.0, 360.0),
+    ballSpeed: 50,
+    maxReflect: Math.PI / 3.0,
+    digitContext: BlockDigit.createContext(40, 80, 10)
+}
+
 class GameState {
     constructor(role, state) {
-        this.constants = {
-            dimensions: new Vector(500.0, 360.0),
-            ballSpeed: 50,
-            maxReflect: Math.PI / 3.0,
-            digitContext: BlockDigit.createContext(40, 80, 10)
-        };
-
         this.role = role;
         this.state = state;
-
         this.paddle1 = new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50));
-        this.paddle2 = new GameObject(new Vector(this.constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
+        this.paddle2 = new GameObject(new Vector(constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
         this.ball = new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10));
         this.score = { a: 0, b: 0 };
         this.simulateBall = true;
     }
 }
 
-var mousePos = new Vector(0, 0);
-var gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
-var ws = null;
-
-function initializeGame() {
-    restoreBallState(true);
-}
-
-function updateGameState(dt) {
-    const dimensions = gameState.constants.dimensions;
+function updateGameState(gameState, inputPosition, dt) {
+    const dimensions = constants.dimensions;
     const canvas = document.getElementById("canvas");
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
-    var newPos = mousePos.y - topOffset - gameState.paddle1.size.y / 2.0;
+    var newPos = inputPosition.y - topOffset - gameState.paddle1.size.y / 2.0;
     if (newPos <= 2.0) {
         newPos = 2.0;
     }
@@ -100,13 +91,13 @@ function updateGameState(dt) {
             ball.velocity.x *= -1.0;
             gameState.score.a += 1;
             gameState.simulateBall = false;
-            setTimeout(function() { restoreBallState(false); }, 3000);
+            setTimeout(function() { restoreBallState(gameState, false); }, 3000);
         }
         else if (ball.velocity.x < 0.0 && ball.position.x <= 0.0) {
             ball.velocity.x *= -1.0;
             gameState.score.b += 1;
             gameState.simulateBall = false;
-            setTimeout(function() { restoreBallState(true); }, 3000);
+            setTimeout(function() { restoreBallState(gameState, true); }, 3000);
         }
 
         if ((ball.velocity.y > 0.0 && ball.position.y >= dimensions.y - ball.size.y) ||
@@ -117,11 +108,11 @@ function updateGameState(dt) {
 }
 
 function reflect(paddle, ball, left) {
-    const maxReflect = gameState.constants.maxReflect;
-    const ballSpeed = gameState.constants.ballSpeed;
+    const maxReflect = constants.maxReflect;
+    const ballSpeed = constants.ballSpeed;
 
     const paddleY = paddle.position.y + paddle.size.y / 2.0;
-    const ballY = gameState.ball.position.y + ball.size.y / 2.0;
+    const ballY = ball.position.y + ball.size.y / 2.0;
     const ratio = (paddleY - ballY) / (paddle.size.y / 2.0);
 
     const reflectAngle = maxReflect * Math.abs(ratio);
@@ -131,51 +122,19 @@ function reflect(paddle, ball, left) {
     }
     ball.velocity.y = ballSpeed * Math.sin(reflectAngle);
     if (ratio > 0.0) {
-        gameState.ball.velocity.y *= -1.0;
+        ball.velocity.y *= -1.0;
     }
 }
 
-function restoreBallState(left) {
-    const dimensions = gameState.constants.dimensions;
-    const ballSpeed = gameState.constants.ballSpeed;
+function restoreBallState(gameState, left) {
+    const dimensions = constants.dimensions;
+    const ballSpeed = constants.ballSpeed;
 
     const vx = ballSpeed * Math.cos(Math.PI / 4.0);
     const vy = ballSpeed * Math.sin(Math.PI / 4.0);
     gameState.ball.position = new Vector(dimensions.x / 2.0, dimensions.y * 0.3);
     gameState.ball.velocity = new Vector(left ? -vx : vx, vy);
     gameState.simulateBall = true;
-}
-
-function drawGame() {
-    const dimensions = gameState.constants.dimensions;
-
-    canvas = document.getElementById("canvas");
-    var context = canvas.getContext("2d");
-    context.fillStyle = "black";
-    context.fillRect(0, 0, dimensions.x, dimensions.y);
-    window.requestAnimationFrame(gameLoop);
-
-    context.fillStyle = "white";
-    drawObject(context, gameState.paddle1);
-    drawObject(context, gameState.paddle2);
-    if (gameState.simulateBall) {
-        drawObject(context, gameState.ball);
-    }
-
-    context.strokeStyle = "white";
-    context.save();
-    BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, gameState.constants.digitContext);
-    BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, gameState.constants.digitContext);
-    context.restore();
-
-    context.lineWidth = 10;
-    context.save();
-    context.beginPath();
-    context.setLineDash([8, 8]);
-    context.moveTo(dimensions.x / 2.0, 0.0);
-    context.lineTo(dimensions.x / 2.0, dimensions.y);
-    context.stroke();
-    context.restore();
 }
 
 function drawObject(context, object) {
@@ -196,6 +155,7 @@ function collides(obj1, obj2) {
     return true;
 }
 
+/** Reflect the current game state to be sent over the wire */
 function packGameStateMessage(state) {
     return {
         type: MessageType.GameStateTx,
@@ -208,6 +168,7 @@ function packGameStateMessage(state) {
     }
 }
 
+/** Load the game state from the network message received */
 function unpackGameStateMessage(packed, state) {
     state.paddle1.position = packed.paddle1;
     state.paddle2.position = packed.paddle2;
@@ -215,22 +176,60 @@ function unpackGameStateMessage(packed, state) {
     state.score = packed.score;
 }
 
-function gameLoop(time) {
+/** Draw the current game state */
+function drawGame(gameState) {
+    const dimensions = constants.dimensions;
+
+    canvas = document.getElementById("canvas");
+    var context = canvas.getContext("2d");
+    context.fillStyle = "black";
+    context.fillRect(0, 0, dimensions.x, dimensions.y);
+
+    context.fillStyle = "white";
+    drawObject(context, gameState.paddle1);
+    drawObject(context, gameState.paddle2);
+    if (gameState.simulateBall) {
+        drawObject(context, gameState.ball);
+    }
+
+    context.strokeStyle = "white";
+    context.save();
+    BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, constants.digitContext);
+    BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, constants.digitContext);
+    context.restore();
+
+    context.lineWidth = 10;
+    context.save();
+    context.beginPath();
+    context.setLineDash([8, 8]);
+    context.moveTo(dimensions.x / 2.0, 0.0);
+    context.lineTo(dimensions.x / 2.0, dimensions.y);
+    context.stroke();
+    context.restore();
+}
+
+/** The self-rescheduling  game loop for both host and client updates */
+function gameLoop(gameState, connection, inputPosition, time) {
     if (gameState.role == Role.Host) {
-        updateGameState(0.04);
+        updateGameState(gameState, inputPosition, 0.04);
         let message = packGameStateMessage(gameState);
         let messageData = JSON.stringify(message);
-        ws.send(messageData);
+        connection.send(messageData);
     }
     else {
         // transmit mouse position
     }
-    drawGame();
+    drawGame(gameState);
+
+    window.requestAnimationFrame(function(time) {
+        gameLoop(gameState, connection, inputPosition, time);
+    });
 }
 
-function setupGame() {
-    gameState.state = State.WaitingPlayer;
-    ws = new WebSocket("ws://localhost:8080");
+/** Initialize comms, establish the role of this instance of the game, and kick off the match */
+function setupMatch() {
+    let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
+    let ws = new WebSocket("ws://localhost:8080");
     ws.onerror = function(event) {
         log("error!");
     }
@@ -245,7 +244,7 @@ function setupGame() {
         let message = JSON.parse(event.data);
         if (message.type == MessageType.MatchStart) {
             gameState.role = message.payload.role;
-            runGame();
+            runGame(gameState, ws);
         }
         else if (message.type == MessageType.InputTx) {
             log("got an input message...");
@@ -256,10 +255,15 @@ function setupGame() {
     }
 }
 
-function runGame() {
-    initializeGame();
+/** Start up the game loop, read input */
+function runGame(gameState, connection) {
+    restoreBallState(gameState, true);
+    var inputPosition = new Vector(0, 0);
     document.onmousemove = function(event) {
-        mousePos = new Vector(event.pageX, event.pageY);
+        inputPosition.x = event.pageX;
+        inputPosition.y = event.pageY;
     };
-    window.requestAnimationFrame(gameLoop);
+    window.requestAnimationFrame(function(time) {
+        gameLoop(gameState, connection, inputPosition, time);
+    });
 }
