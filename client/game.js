@@ -56,16 +56,13 @@ class GameState {
     }
 }
 
-var mousePos = new Vector(0, 0);
-var ws = null;
-
-function updateGameState(gameState, dt) {
+function updateGameState(gameState, inputPosition, dt) {
     const dimensions = constants.dimensions;
     const canvas = document.getElementById("canvas");
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
-    var newPos = mousePos.y - topOffset - gameState.paddle1.size.y / 2.0;
+    var newPos = inputPosition.y - topOffset - gameState.paddle1.size.y / 2.0;
     if (newPos <= 2.0) {
         newPos = 2.0;
     }
@@ -158,6 +155,7 @@ function collides(obj1, obj2) {
     return true;
 }
 
+/** Reflect the current game state to be sent over the wire */
 function packGameStateMessage(state) {
     return {
         type: MessageType.GameStateTx,
@@ -170,6 +168,7 @@ function packGameStateMessage(state) {
     }
 }
 
+/** Load the game state from the network message received */
 function unpackGameStateMessage(packed, state) {
     state.paddle1.position = packed.paddle1;
     state.paddle2.position = packed.paddle2;
@@ -177,6 +176,7 @@ function unpackGameStateMessage(packed, state) {
     state.score = packed.score;
 }
 
+/** Draw the current game state */
 function drawGame(gameState) {
     const dimensions = constants.dimensions;
 
@@ -208,12 +208,13 @@ function drawGame(gameState) {
     context.restore();
 }
 
-function gameLoop(gameState, time) {
+/** The self-rescheduling  game loop for both host and client updates */
+function gameLoop(gameState, connection, inputPosition, time) {
     if (gameState.role == Role.Host) {
-        updateGameState(gameState, 0.04);
+        updateGameState(gameState, inputPosition, 0.04);
         let message = packGameStateMessage(gameState);
         let messageData = JSON.stringify(message);
-        ws.send(messageData);
+        connection.send(messageData);
     }
     else {
         // transmit mouse position
@@ -221,14 +222,14 @@ function gameLoop(gameState, time) {
     drawGame(gameState);
 
     window.requestAnimationFrame(function(time) {
-        gameLoop(gameState, time);
+        gameLoop(gameState, connection, inputPosition, time);
     });
 }
 
-function setupComms() {
-    var gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
-
-    ws = new WebSocket("ws://localhost:8080");
+/** Initialize comms, establish the role of this instance of the game, and kick off the match */
+function setupMatch() {
+    let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
+    let ws = new WebSocket("ws://localhost:8080");
     ws.onerror = function(event) {
         log("error!");
     }
@@ -243,7 +244,7 @@ function setupComms() {
         let message = JSON.parse(event.data);
         if (message.type == MessageType.MatchStart) {
             gameState.role = message.payload.role;
-            runGame(gameState);
+            runGame(gameState, ws);
         }
         else if (message.type == MessageType.InputTx) {
             log("got an input message...");
@@ -252,17 +253,17 @@ function setupComms() {
             unpackGameStateMessage(message.payload, gameState);
         }
     }
-
-    gameState.role = Role.Host;
-    runGame(gameState);
 }
 
-function runGame(gameState) {
+/** Start up the game loop, read input */
+function runGame(gameState, connection) {
     restoreBallState(gameState, true);
+    var inputPosition = new Vector(0, 0);
     document.onmousemove = function(event) {
-        mousePos = new Vector(event.pageX, event.pageY);
+        inputPosition.x = event.pageX;
+        inputPosition.y = event.pageY;
     };
     window.requestAnimationFrame(function(time) {
-        gameLoop(gameState, time);
+        gameLoop(gameState, connection, inputPosition, time);
     });
 }
