@@ -19,6 +19,7 @@ type match struct {
 func startMatch(m *match) {
 	log.Println("Starting a match...")
 
+	// For the time being, we keep the connection open and await a pair.
 	finished := false
 	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
 		for !finished {
@@ -57,6 +58,7 @@ func startMatch(m *match) {
 }
 
 func makeMatches(mm *matchMaker) {
+	// Host connections wait around here...
 	var pending *websocket.Conn
 	for {
 		conn := <-mm.connInput
@@ -77,6 +79,12 @@ var mm matchMaker
 
 func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received a request...")
+
+	// TODO: use the match id to set up the connection with the awaiting player.
+	// If there *isn't* a valid match, forget about it.
+	mid := r.URL.Query()["mid"]
+	log.Println(mid)
+
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,

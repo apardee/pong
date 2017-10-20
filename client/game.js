@@ -228,8 +228,23 @@ function gameLoop(gameState, connection, inputPosition, time) {
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
 function setupMatch() {
+    let midAttr = "mid";
+    let params = window.location.search.substring(1).split(new RegExp("=|\&"));
+    var mid = null;
+    for (var i = 0; i < params.length - 1; i++) {
+        if (params[i] === midAttr) {
+            mid = params[i + 1];
+            break;
+        }
+    }
+
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
-    let ws = new WebSocket("ws://localhost:8080");
+    let gameUrl = "ws://localhost:8080";
+    if (mid != null) {
+        gameUrl = gameUrl + "?" + midAttr + "=" + mid;
+    }
+    
+    let ws = new WebSocket(gameUrl);
     ws.onerror = function(event) {
         log("error!");
     }
