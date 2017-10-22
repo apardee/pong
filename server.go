@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -20,12 +21,15 @@ func startMatch(m *match) {
 	log.Println("Starting a match...")
 
 	// For the time being, we keep the connection open and await a pair.
+	finishedLock := &sync.Mutex{}
 	finished := false
 	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
 		for !finished {
 			_, byt, err := conn.ReadMessage()
 			if err != nil {
+				finishedLock.Lock()
 				finished = true
+				finishedLock.Unlock()
 			} else {
 				out <- byt
 			}
@@ -43,15 +47,25 @@ func startMatch(m *match) {
 	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
 
 	// Once started, just relay messages between the two.
-	for !finished {
+	for {
+		finishedLock.Lock()
+		if finished {
+			break
+		}
+		finishedLock.Unlock()
+
 		select {
 		case byt := <-hostRead:
 			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
+				finishedLock.Lock()
 				finished = true
+				finishedLock.Unlock()
 			}
 		case byt := <-clientRead:
 			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
+				finishedLock.Lock()
 				finished = true
+				finishedLock.Unlock()
 			}
 		}
 	}
