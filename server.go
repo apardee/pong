@@ -9,13 +9,25 @@ import (
 )
 
 type matchMaker struct {
-	connInput chan *websocket.Conn
+	connInput          chan *websocket.Conn
+	matchesPendingLock sync.Mutex
+	matchesPending     map[string]*websocket.Conn
+}
+
+func newMatchMaker() *matchMaker {
+	return &matchMaker{
+		connInput:          make(chan *websocket.Conn),
+		matchesPendingLock: sync.Mutex{},
+		matchesPending:     make(map[string]*websocket.Conn),
+	}
 }
 
 type match struct {
 	host   *websocket.Conn
 	client *websocket.Conn
 }
+
+var mm *matchMaker
 
 func startMatch(m *match) {
 	log.Println("Starting a match...")
@@ -89,8 +101,6 @@ func makeMatches(mm *matchMaker) {
 	}
 }
 
-var mm matchMaker
-
 func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received a request...")
 
@@ -146,9 +156,9 @@ func runConnection() {
 }
 
 func main() {
-	mm = matchMaker{connInput: make(chan *websocket.Conn)}
+	mm = newMatchMaker()
 	// go runConnection()
-	go makeMatches(&mm)
+	go makeMatches(mm)
 	http.HandleFunc("/", receiveConnection)
 	http.ListenAndServe(":8080", nil)
 }
