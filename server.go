@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"sync"
@@ -33,17 +34,24 @@ func startMatch(m *match) {
 	log.Println("Starting a match...")
 
 	// For the time being, we keep the connection open and await a pair.
-	finishedLock := &sync.Mutex{}
-	finished := false
-	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	chanReader := func(conn *websocket.Conn, out chan<- []byte, dump bool) {
+		finished := false
 		for !finished {
-			_, byt, err := conn.ReadMessage()
-			if err != nil {
-				finishedLock.Lock()
+			select {
+			case <-ctx.Done():
 				finished = true
-				finishedLock.Unlock()
-			} else {
-				out <- byt
+				cancel()
+				break
+			default:
+				_, byt, err := conn.ReadMessage()
+				if err != nil {
+					cancel()
+				} else {
+					out <- byt
+				}
 			}
 		}
 	}
@@ -51,33 +59,27 @@ func startMatch(m *match) {
 	hostRead := make(chan []byte)
 	clientRead := make(chan []byte)
 
-	go chanReader(m.host, hostRead)
-	go chanReader(m.client, clientRead)
+	go chanReader(m.host, hostRead, false)
+	go chanReader(m.client, clientRead, true)
 
 	// Kick off the match by sending the `MatchStart` message through both connections.
 	m.host.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"))
 	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
 
 	// Once started, just relay messages between the two.
-	for {
-		finishedLock.Lock()
-		if finished {
-			break
-		}
-		finishedLock.Unlock()
-
+	finished := false
+	for !finished {
 		select {
+		case <-ctx.Done():
+			finished = true
+			break
 		case byt := <-hostRead:
 			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
-				finishedLock.Lock()
-				finished = true
-				finishedLock.Unlock()
+				cancel()
 			}
 		case byt := <-clientRead:
 			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
-				finishedLock.Lock()
-				finished = true
-				finishedLock.Unlock()
+				cancel()
 			}
 		}
 	}
