@@ -218,6 +218,14 @@ function drawGame(gameState) {
     context.restore();
 }
 
+function hostPressed() {
+    alert("host");
+}
+
+function clientPressed() {
+    alert("client");
+}
+
 /** Draw the current game state */
 function drawJoin(gameState) {
     // const dimensions = constants.dimensions;

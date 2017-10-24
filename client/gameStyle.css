@@ -4,3 +4,8 @@
   font:48px Andale Mono;
   border:0px;
 }
+
+.button:active {
+    outline: none;
+    border: none;
+}
