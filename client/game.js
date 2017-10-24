@@ -179,7 +179,7 @@ function unpackGameStateMessage(packed, state) {
 /** Offset an input position to canvas coordinates */
 function offsetForCanvas(position, canvas) {
     const topOffset = canvas.offsetTop;
-    const leftOffset = canvas.leftOffset;
+    const leftOffset = canvas.offsetLeft;
     return new Vector(position.x - leftOffset, position.y - topOffset);
 }
 
@@ -274,9 +274,14 @@ function startup() {
     document.onmousedown = function(event) {
         let pagePos = new Vector(event.pageX, event.pageY);
         let transformed = offsetForCanvas(pagePos, canvas);
-        alert(transformed);
+        if (transformed.x > constants.dimensions.x / 2.0) {
+            // prompt for the match id.
+        }
+        else {
+            // setup map.
+            setupMatch(nil);
+        }
     };
-    // Wait for the click...
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
