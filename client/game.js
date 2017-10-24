@@ -220,10 +220,10 @@ function drawGame(gameState) {
 
 /** Draw the current game state */
 function drawJoin(gameState) {
-    const dimensions = constants.dimensions;
-    let canvas = document.getElementById("canvas");
-    let context = canvas.getContext("2d");
-    drawBackground(context, dimensions);
+    // const dimensions = constants.dimensions;
+    // let canvas = document.getElementById("canvas");
+    // let context = canvas.getContext("2d");
+    // drawBackground(context, dimensions);
 }
 
 function drawBackground(context, dimensions) {
