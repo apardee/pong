@@ -224,11 +224,6 @@ function drawJoin(gameState) {
     let canvas = document.getElementById("canvas");
     let context = canvas.getContext("2d");
     drawBackground(context, dimensions);
-
-    let offset = new Vector(70, 180);
-    context.font = '48px Andale Mono';
-    context.fillText("HOST", offset.x, offset.y);
-    context.fillText("JOIN", dimensions.x / 2.0 + offset.x, offset.y);
 }
 
 function drawBackground(context, dimensions) {
