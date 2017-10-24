@@ -62,7 +62,7 @@ function updateGameState(gameState, inputPosition, dt) {
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
-    var newPos = inputPosition.y - topOffset - gameState.paddle1.size.y / 2.0;
+    var newPos = inputPosition.y - gameState.paddle1.size.y / 2.0;
     if (newPos <= 2.0) {
         newPos = 2.0;
     }
@@ -176,14 +176,33 @@ function unpackGameStateMessage(packed, state) {
     state.score = packed.score;
 }
 
+/** Offset an input position to canvas coordinates */
+function offsetForCanvas(position, canvas) {
+    const topOffset = canvas.offsetTop;
+    const leftOffset = canvas.leftOffset;
+    return new Vector(position.x - leftOffset, position.y - topOffset);
+}
+
+/** Read 'mid' off of the active url */
+function getUrlMatchId() {
+    let midAttr = "mid";
+    let params = window.location.search.substring(1).split(new RegExp("=|\&"));
+    var mid = null;
+    for (var i = 0; i < params.length - 1; i++) {
+        if (params[i] === midAttr) {
+            mid = params[i + 1];
+            break;
+        }
+    }
+    return mid;
+}
+
 /** Draw the current game state */
 function drawGame(gameState) {
     const dimensions = constants.dimensions;
-
-    canvas = document.getElementById("canvas");
-    var context = canvas.getContext("2d");
-    context.fillStyle = "black";
-    context.fillRect(0, 0, dimensions.x, dimensions.y);
+    let canvas = document.getElementById("canvas");
+    let context = canvas.getContext("2d");
+    drawBackground(context, dimensions);
 
     context.fillStyle = "white";
     drawObject(context, gameState.paddle1);
@@ -197,7 +216,26 @@ function drawGame(gameState) {
     BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, constants.digitContext);
     BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, constants.digitContext);
     context.restore();
+}
 
+/** Draw the current game state */
+function drawJoin(gameState) {
+    const dimensions = constants.dimensions;
+    let canvas = document.getElementById("canvas");
+    let context = canvas.getContext("2d");
+    drawBackground(context, dimensions);
+
+    let offset = new Vector(70, 180);
+    context.font = '48px Andale Mono';
+    context.fillText("HOST", offset.x, offset.y);
+    context.fillText("JOIN", dimensions.x / 2.0 + offset.x, offset.y);
+}
+
+function drawBackground(context, dimensions) {
+    context.fillStyle = "black";
+    context.fillRect(0, 0, dimensions.x, dimensions.y);
+    context.fillStyle = "white";
+    context.strokeStyle = "white";
     context.lineWidth = 10;
     context.save();
     context.beginPath();
@@ -226,18 +264,23 @@ function gameLoop(gameState, connection, inputPosition, time) {
     });
 }
 
-/** Initialize comms, establish the role of this instance of the game, and kick off the match */
-function setupMatch() {
-    let midAttr = "mid";
-    let params = window.location.search.substring(1).split(new RegExp("=|\&"));
-    var mid = null;
-    for (var i = 0; i < params.length - 1; i++) {
-        if (params[i] === midAttr) {
-            mid = params[i + 1];
-            break;
-        }
-    }
+function startup() {
+    let canvas = document.getElementById("canvas");
 
+    // Either start a hosted match, or provide the option to host or enter a match code.
+    // Evaluate the url parameter here, it could have been provided to jumpstart the match.
+    drawJoin();
+
+    document.onmousedown = function(event) {
+        let pagePos = new Vector(event.pageX, event.pageY);
+        let transformed = offsetForCanvas(pagePos, canvas);
+        alert(transformed);
+    };
+    // Wait for the click...
+}
+
+/** Initialize comms, establish the role of this instance of the game, and kick off the match */
+function setupMatch(mid) {
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
     let gameUrl = "ws://localhost:8080";
     if (mid != null) {
@@ -272,11 +315,15 @@ function setupMatch() {
 
 /** Start up the game loop, read input */
 function runGame(gameState, connection) {
+    let canvas = document.getElementById("canvas");
+
     restoreBallState(gameState, true);
     var inputPosition = new Vector(0, 0);
     document.onmousemove = function(event) {
-        inputPosition.x = event.pageX;
-        inputPosition.y = event.pageY;
+        let pagePos = new Vector(event.pageX, event.pageY);
+        let canvasPos = offsetForCanvas(pagePos, canvas);
+        inputPosition.x = canvasPos.x;
+        inputPosition.y = canvasPos.y;
     };
     window.requestAnimationFrame(function(time) {
         gameLoop(gameState, connection, inputPosition, time);

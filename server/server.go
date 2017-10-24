@@ -87,6 +87,7 @@ func startMatch(m *match) {
 
 func makeMatches(mm *matchMaker) {
 	// Host connections wait around here...
+	// TODO: This needs to be totally rewritten.
 	var pending *websocket.Conn
 	for {
 		conn := <-mm.connInput
@@ -108,8 +109,19 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: use the match id to set up the connection with the awaiting player.
 	// If there *isn't* a valid match, forget about it.
-	mid := r.URL.Query()["mid"]
-	log.Println(mid)
+	mids := r.URL.Query()["mid"]
+	if len(mids) > 0 {
+		mid := mids[0]
+		mm.matchesPendingLock.Lock()
+		_, ok := mm.matchesPending[mid]
+		if !ok {
+			log.Println("no match found :(")
+		}
+		mm.matchesPendingLock.Unlock()
+
+		// matchesPendingLock sync.Mutex
+		// matchesPending     map[string]*websocket.Conn
+	}
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
