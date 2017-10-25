@@ -5,6 +5,7 @@ function log(message) {
 }
 
 const MessageType = {
+    MatchId: "MatchId",
     MatchStart: "MatchStart",
     InputTx: "InputTx",
     GameStateTx: "GameStateTx"
@@ -58,7 +59,7 @@ class GameState {
 
 function updateGameState(gameState, inputPosition, dt) {
     const dimensions = constants.dimensions;
-    const canvas = document.getElementById("canvas");
+    const canvas = $("#canvas");
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
@@ -200,8 +201,7 @@ function getUrlMatchId() {
 /** Draw the current game state */
 function drawGame(gameState) {
     const dimensions = constants.dimensions;
-    let canvas = document.getElementById("canvas");
-    let context = canvas.getContext("2d");
+    let context = $("#canvas")
     drawBackground(context, dimensions);
 
     context.fillStyle = "white";
@@ -218,20 +218,60 @@ function drawGame(gameState) {
     context.restore();
 }
 
-function hostPressed() {
-    alert("host");
+/** Start the menu flow */
+function runMenu() {
+    $("#loadingIndicator").css("opacity", 0.0);
+    $("#hostAddress").css("opacity", 0.0);
+    $("#matchInput").css("opacity", 0.0);
+
+    $("#joinButton").click(function() {
+        alert("join pressed...");
+    });
+
+    $("#hostButton").click(function() {
+        var continueAnimation = true;
+        $("#joinButton").animate({ opacity: 0 });
+        animateLoadingIndicator(function() { return continueAnimation; });
+        let match = runMatch(null);
+        match.midReceived = function(mid) {
+            $("#loadingIndicator").css("opacity", 0.0);
+            $("#hostAddress").css("opacity", 1.0);
+            $("#hostAddress").text(mid);
+            continueAnimation = false;
+        };
+    });
 }
 
-function clientPressed() {
-    alert("client");
+function animateLoadingIndicator(shouldContinue) {
+    let element =  $("#loadingIndicator");
+    element.css("opacity", 1.0);
+    let interval = 400;
+    element.text(" ");
+    window.setTimeout(function() {
+        element.text(".");
+        window.setTimeout(function() {
+            element.text("..");
+            window.setTimeout(function() {
+                element.text("...");
+                window.setTimeout(function() {
+                    if (shouldContinue()) {
+                        animateLoadingIndicator(shouldContinue);
+                    }
+                    else {
+                        element.css("opacity", 0.0);
+                    }
+                }, interval);
+            }, interval);
+        }, interval);
+    }, interval);
 }
 
-/** Draw the current game state */
-function drawJoin(gameState) {
+function drawConnecting() {
     // const dimensions = constants.dimensions;
-    // let canvas = document.getElementById("canvas");
-    // let context = canvas.getContext("2d");
+    let context = $("#canvas").getContext("2d");
     // drawBackground(context, dimensions);
+
+    context.fillText("loading...", 0, 0);
 }
 
 function drawBackground(context, dimensions) {
@@ -268,27 +308,19 @@ function gameLoop(gameState, connection, inputPosition, time) {
 }
 
 function startup() {
-    let canvas = document.getElementById("canvas");
-
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
-    drawJoin();
-
-    document.onmousedown = function(event) {
-        let pagePos = new Vector(event.pageX, event.pageY);
-        let transformed = offsetForCanvas(pagePos, canvas);
-        if (transformed.x > constants.dimensions.x / 2.0) {
-            // prompt for the match id.
-        }
-        else {
-            // setup map.
-            setupMatch(nil);
-        }
-    };
+    runMenu();
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
-function setupMatch(mid) {
+function runMatch(mid) {
+    let match = {
+        midReceived: function(mid) {},
+        matchStarted: function() {},
+        matchEnded: function() {}
+    };
+
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
     let gameUrl = "ws://localhost:8080";
     if (mid != null) {
@@ -308,17 +340,23 @@ function setupMatch(mid) {
     ws.onmessage = function(event) {
         // log("rx: " + event.data);
         let message = JSON.parse(event.data);
-        if (message.type == MessageType.MatchStart) {
+        if (message.type === MessageType.MatchId) {
+            match.midReceived(message.payload.mid);
+        }
+        else if (message.type === MessageType.MatchStart) {
+            match.matchStarted();
             gameState.role = message.payload.role;
             runGame(gameState, ws);
         }
-        else if (message.type == MessageType.InputTx) {
+        else if (message.type === MessageType.InputTx) {
             log("got an input message...");
         }
-        else if (message.type == MessageType.GameStateTx) {
+        else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
         }
     }
+
+    return match;
 }
 
 /** Start up the game loop, read input */

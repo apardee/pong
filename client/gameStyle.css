@@ -9,3 +9,17 @@
     outline: none;
     border: none;
 }
+
+.button:selected {
+  outline: none;
+  border: none;
+}
+
+.centered {
+  position: absolute;
+  margin: auto;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0; 
+}

@@ -2,16 +2,21 @@
 <head>
     <title>PONG</title>
     <link rel="stylesheet" href="gameStyle.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
     <script src="blockDigit.js"></script>
     <script src="game.js"></script>
 </head>
 <body onload="startup();" style="background-color:black; color:white; font-family:monospace;">
-    <canvas id="canvas" width="500" height="360" style="position: absolute; margin: auto; top: 0; bottom: 0; left: 0; right: 0; border:10pt solid white;"></canvas>
-    <div id="interface" style="width:500px; height:360px; position: absolute; margin: auto; top: 0; bottom: 0; left: 0; right: 0; background:clear; text-align:center;">
-        <form>
-            <input type="submit" class="button" value="HOST" onclick="hostPressed();"><br>
-            <input type="submit" class="button" value="JOIN" onclick="clientPressed();">
+    <canvas id="canvas" width="500" height="360" class="centered" style="border:10pt solid white;"></canvas>
+    <div id="interface" class="centered" style="width:500; height:360; background:clear; text-align:center; font:48px Andale Mono;
+  border:0px;">
+        <form onsubmit="return false;">
+            <input type="submit" id="hostButton" class="button" value="Host a New Match"><br>
+            <input type="submit" id="joinButton" class="button" value="Join a Match"><br>
+            <input type="text" id="matchInput" style="border:4pt; border-style:solid; border-color:white; width:124px; text-align:center;" id="blah" class="button">
         </form>
+        <div id="hostAddress"></div>
+        <div id="loadingIndicator">...</div>
     </div>
     <div id="output"></div>
 </body>
