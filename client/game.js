@@ -232,10 +232,10 @@ function hideInterface() {
 function runMenu() {
     showInterface();
     $("#loadingIndicator").css("opacity", 0.0);
-    $("#hostAddress").css("opacity", 0.0);
+
+    $("#joinMessaging").css("opacity", 0.0);
     $("#matchInput").css("opacity", 0.0);
 
-    // TODO: hover effects...
     $("#hostButton").click(function() {
         var continueAnimation = true;
         $("#hostButton").animate({ opacity: 0 });
@@ -245,12 +245,13 @@ function runMenu() {
         let match = runMatch(null);
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
-            $("#hostAddress").css("opacity", 1.0);
+            $("#interface").append('<div id="hostAddress"></div>')
             $("#hostAddress").text(mid);
             continueAnimation = false;
         };
 
         match.matchStarted = function() {
+            $("#hostAddress").remove();
             hideInterface();
         }
     });
@@ -258,7 +259,8 @@ function runMenu() {
     $("#joinButton").click(function() {
         $("#hostButton").animate({ opacity: 0 });
         $("#joinButton").animate({ opacity: 0 });
-        $("#matchInput").animate({ opacity: 1.0 });
+        $("#joinMessaging").animate({ opacity: 1.0 });
+        $("#matchInput").css("opacity", 1.0);
         $("#matchInput").get(0).focus();
         $("#matchInput").keyup(function() {
             let value = $("#matchInput").val();
@@ -354,7 +356,9 @@ function runMatch(mid) {
     let match = {
         midReceived: function(mid) {},
         matchStarted: function() {},
-        matchEnded: function() {}
+        matchEnded: function() {},
+        connectionError: function() {},
+        connectionClosed: function() {}
     };
 
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
@@ -366,12 +370,14 @@ function runMatch(mid) {
     let ws = new WebSocket(gameUrl);
     ws.onerror = function(event) {
         log("error!");
+        match.connectionError();
     }
     ws.onopen = function(event) {
         log("connected!");
     }
     ws.onclose = function(event) {
         log("close!");
+        match.connectionClosed();
     }
     ws.onmessage = function(event) {
         // log("rx: " + event.data);

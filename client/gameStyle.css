@@ -1,4 +1,4 @@
-.button {
+.button, .textEntry {
   color: #FFF;
   background-color:black;
   font:48px Andale Mono;
@@ -22,4 +22,16 @@
   bottom: 0;
   left: 0;
   right: 0; 
+}
+
+.message {
+  font:16px Andale Mono;
+}
+
+.textEntry button {
+  border:4pt;
+  border-style:solid;
+  border-color:white;
+  width:130px;
+  text-align:center;
 }
