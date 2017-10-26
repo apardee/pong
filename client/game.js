@@ -219,19 +219,26 @@ function drawGame(gameState) {
     context.restore();
 }
 
+function showInterface() {
+    // TODO: add / remove the div
+    $("#interface").css("opacity", 1.0);
+}
+
+function hideInterface() {
+    $("#interface").css("opacity", 0.0);
+}
+
 /** Start the menu flow */
 function runMenu() {
-    $("#interface").css("opacity", 1.0);
+    showInterface();
     $("#loadingIndicator").css("opacity", 0.0);
     $("#hostAddress").css("opacity", 0.0);
     $("#matchInput").css("opacity", 0.0);
 
-    $("#joinButton").click(function() {
-        alert("join pressed...");
-    });
-
+    // TODO: hover effects...
     $("#hostButton").click(function() {
         var continueAnimation = true;
+        $("#hostButton").animate({ opacity: 0 });
         $("#joinButton").animate({ opacity: 0 });
         animateLoadingIndicator(function() { return continueAnimation; });
 
@@ -244,8 +251,24 @@ function runMenu() {
         };
 
         match.matchStarted = function() {
-            $("#interface").css("opacity", 0.0);
+            hideInterface();
         }
+    });
+
+    $("#joinButton").click(function() {
+        $("#hostButton").animate({ opacity: 0 });
+        $("#joinButton").animate({ opacity: 0 });
+        $("#matchInput").animate({ opacity: 1.0 });
+        $("#matchInput").get(0).focus();
+        $("#matchInput").keyup(function() {
+            let value = $("#matchInput").val();
+            if (value.length == 4) {
+                let match = runMatch(value);
+                match.matchStarted = function() {
+                    hideInterface();
+                }
+            }
+        })
     });
 }
 
