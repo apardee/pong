@@ -5,6 +5,7 @@ function log(message) {
 }
 
 const MessageType = {
+    MatchId: "MatchId",
     MatchStart: "MatchStart",
     InputTx: "InputTx",
     GameStateTx: "GameStateTx"
@@ -21,6 +22,8 @@ const Role = {
     Host: "Host",
     Client: "Client"
 };
+
+let midAttr = "mid";
 
 class Vector {
     constructor(x, y) {
@@ -58,7 +61,7 @@ class GameState {
 
 function updateGameState(gameState, inputPosition, dt) {
     const dimensions = constants.dimensions;
-    const canvas = document.getElementById("canvas");
+    const canvas = $("#canvas").get(0);
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
@@ -185,7 +188,6 @@ function offsetForCanvas(position, canvas) {
 
 /** Read 'mid' off of the active url */
 function getUrlMatchId() {
-    let midAttr = "mid";
     let params = window.location.search.substring(1).split(new RegExp("=|\&"));
     var mid = null;
     for (var i = 0; i < params.length - 1; i++) {
@@ -200,8 +202,7 @@ function getUrlMatchId() {
 /** Draw the current game state */
 function drawGame(gameState) {
     const dimensions = constants.dimensions;
-    let canvas = document.getElementById("canvas");
-    let context = canvas.getContext("2d");
+    let context = $("#canvas").get(0).getContext("2d");
     drawBackground(context, dimensions);
 
     context.fillStyle = "white";
@@ -218,20 +219,91 @@ function drawGame(gameState) {
     context.restore();
 }
 
-function hostPressed() {
-    alert("host");
+function showInterface() {
+    // TODO: add / remove the div
+    $("#interface").css("opacity", 1.0);
 }
 
-function clientPressed() {
-    alert("client");
+function hideInterface() {
+    $("#interface").css("opacity", 0.0);
 }
 
-/** Draw the current game state */
-function drawJoin(gameState) {
-    // const dimensions = constants.dimensions;
-    // let canvas = document.getElementById("canvas");
-    // let context = canvas.getContext("2d");
-    // drawBackground(context, dimensions);
+/** Start the menu flow */
+function runMenu() {
+    showInterface();
+    $("#loadingIndicator").css("opacity", 0.0);
+
+    $("#joinMessaging").css("opacity", 0.0);
+    $("#matchInput").css("opacity", 0.0);
+
+    $("#hostButton").click(function() {
+        var continueAnimation = true;
+        $("#hostButton").animate({ opacity: 0 });
+        $("#joinButton").animate({ opacity: 0 });
+        animateLoadingIndicator(function() { return continueAnimation; });
+
+        let match = runMatch(null);
+        match.midReceived = function(mid) {
+            $("#loadingIndicator").css("opacity", 0.0);
+            $("#interface").append('<div id="hostAddress"></div>')
+            $("#hostAddress").text(mid);
+            continueAnimation = false;
+        };
+
+        match.matchStarted = function() {
+            $("#hostAddress").remove();
+            hideInterface();
+        }
+    });
+
+    $("#joinButton").click(function() {
+        $("#hostButton").animate({ opacity: 0 });
+        $("#joinButton").animate({ opacity: 0 });
+        $("#joinMessaging").animate({ opacity: 1.0 });
+        $("#matchInput").css("opacity", 1.0);
+        $("#matchInput").get(0).focus();
+        $("#matchInput").keyup(function() {
+            let value = $("#matchInput").val();
+            if (value.length == 4) {
+                let match = runMatch(value);
+                match.matchStarted = function() {
+                    hideInterface();
+                }
+            }
+        })
+    });
+}
+
+function animateLoadingIndicator(shouldContinue) {
+    let element =  $("#loadingIndicator");
+    element.css("opacity", 1.0);
+    let interval = 400;
+    element.text(" ");
+    window.setTimeout(function() {
+        element.text(".");
+        window.setTimeout(function() {
+            element.text("..");
+            window.setTimeout(function() {
+                element.text("...");
+                window.setTimeout(function() {
+                    if (shouldContinue()) {
+                        animateLoadingIndicator(shouldContinue);
+                    }
+                    else {
+                        element.css("opacity", 0.0);
+                    }
+                }, interval);
+            }, interval);
+        }, interval);
+    }, interval);
+}
+
+function drawConnecting() {
+    const dimensions = constants.dimensions;
+    let context = $("#canvas").get(0).getContext("2d");
+    drawBackground(context, dimensions);
+
+    context.fillText("loading...", 0, 0);
 }
 
 function drawBackground(context, dimensions) {
@@ -268,27 +340,27 @@ function gameLoop(gameState, connection, inputPosition, time) {
 }
 
 function startup() {
-    let canvas = document.getElementById("canvas");
-
+    $("#interface").css("opacity", 0.0);
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
-    drawJoin();
-
-    document.onmousedown = function(event) {
-        let pagePos = new Vector(event.pageX, event.pageY);
-        let transformed = offsetForCanvas(pagePos, canvas);
-        if (transformed.x > constants.dimensions.x / 2.0) {
-            // prompt for the match id.
-        }
-        else {
-            // setup map.
-            setupMatch(nil);
-        }
-    };
+    let mid = getUrlMatchId()
+    if (mid === null) {
+        runMenu();
+    } else {
+        runMatch(mid);
+    }
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
-function setupMatch(mid) {
+function runMatch(mid) {
+    let match = {
+        midReceived: function(mid) {},
+        matchStarted: function() {},
+        matchEnded: function() {},
+        connectionError: function() {},
+        connectionClosed: function() {}
+    };
+
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
     let gameUrl = "ws://localhost:8080";
     if (mid != null) {
@@ -298,32 +370,40 @@ function setupMatch(mid) {
     let ws = new WebSocket(gameUrl);
     ws.onerror = function(event) {
         log("error!");
+        match.connectionError();
     }
     ws.onopen = function(event) {
         log("connected!");
     }
     ws.onclose = function(event) {
         log("close!");
+        match.connectionClosed();
     }
     ws.onmessage = function(event) {
         // log("rx: " + event.data);
         let message = JSON.parse(event.data);
-        if (message.type == MessageType.MatchStart) {
+        if (message.type === MessageType.MatchId) {
+            match.midReceived(message.payload.mid);
+        }
+        else if (message.type === MessageType.MatchStart) {
+            match.matchStarted();
             gameState.role = message.payload.role;
             runGame(gameState, ws);
         }
-        else if (message.type == MessageType.InputTx) {
+        else if (message.type === MessageType.InputTx) {
             log("got an input message...");
         }
-        else if (message.type == MessageType.GameStateTx) {
+        else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
         }
     }
+
+    return match;
 }
 
 /** Start up the game loop, read input */
 function runGame(gameState, connection) {
-    let canvas = document.getElementById("canvas");
+    let canvas = $("canvas").get(0);
 
     restoreBallState(gameState, true);
     var inputPosition = new Vector(0, 0);

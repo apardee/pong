@@ -2,22 +2,30 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
+type matchPending struct {
+	host bool
+	mid string
+	conn *websocket.Conn
+}
+
 type matchMaker struct {
-	connInput          chan *websocket.Conn
+	connInput          chan *matchPending
 	matchesPendingLock sync.Mutex
 	matchesPending     map[string]*websocket.Conn
 }
 
 func newMatchMaker() *matchMaker {
 	return &matchMaker{
-		connInput:          make(chan *websocket.Conn),
+		connInput:          make(chan *matchPending),
 		matchesPendingLock: sync.Mutex{},
 		matchesPending:     make(map[string]*websocket.Conn),
 	}
@@ -87,19 +95,38 @@ func startMatch(m *match) {
 
 func makeMatches(mm *matchMaker) {
 	// Host connections wait around here...
-	// TODO: This needs to be totally rewritten.
-	var pending *websocket.Conn
+	// TODO: Keep-alive for all websocket connections.
 	for {
-		conn := <-mm.connInput
-		log.Println("received connection")
-		if pending == nil {
-			log.Println("received connection")
-			pending = conn
+		log.Println("Got a pending match...")
+		pending := <-mm.connInput
+		if pending.host {
+			var mid string
+			mm.matchesPendingLock.Lock()
+			for {
+				mid = fmt.Sprintf("%04d", rand.Intn(1000))
+				_, ok := mm.matchesPending[mid]
+				if !ok {
+					break
+				}
+			}
+			mm.matchesPending[mid] = pending.conn
+			mm.matchesPendingLock.Unlock()
+
+			message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
+			pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
 		} else {
-			log.Println("received connection")
-			m := match{host: pending, client: conn}
-			go startMatch(&m)
-			pending = nil
+			log.Println("")
+			mm.matchesPendingLock.Lock()
+			hostConn := mm.matchesPending[pending.mid]
+			delete(mm.matchesPending, pending.mid)
+			mm.matchesPendingLock.Unlock()
+
+			if hostConn != nil {
+				m := match{host: hostConn, client: pending.conn}
+				go startMatch(&m)
+			} else {
+				// TODO: Write an error back into the client socket.
+			}
 		}
 	}
 }
@@ -107,11 +134,10 @@ func makeMatches(mm *matchMaker) {
 func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received a request...")
 
-	// TODO: use the match id to set up the connection with the awaiting player.
-	// If there *isn't* a valid match, forget about it.
+	var mid string
 	mids := r.URL.Query()["mid"]
 	if len(mids) > 0 {
-		mid := mids[0]
+		mid = mids[0]
 		mm.matchesPendingLock.Lock()
 		_, ok := mm.matchesPending[mid]
 		if !ok {
@@ -119,9 +145,13 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		}
 		mm.matchesPendingLock.Unlock()
 
-		// matchesPendingLock sync.Mutex
-		// matchesPending     map[string]*websocket.Conn
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("404 - Match does not exist"))
+			return
+		}
 	}
+	log.Println("match id... %v", mid)
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -136,7 +166,8 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	} else {
 		log.Println("Upgraded a request...")
-		mm.connInput <- conn
+		pending := &matchPending{host: mid == "", mid: mid, conn: conn}
+		mm.connInput <- pending
 	}
 }
 
