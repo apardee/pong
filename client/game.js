@@ -23,6 +23,8 @@ const Role = {
     Client: "Client"
 };
 
+let midAttr = "mid";
+
 class Vector {
     constructor(x, y) {
         this.x = x;
@@ -59,7 +61,7 @@ class GameState {
 
 function updateGameState(gameState, inputPosition, dt) {
     const dimensions = constants.dimensions;
-    const canvas = $("#canvas");
+    const canvas = $("#canvas").get(0);
     const topOffset = canvas.offsetTop;
 
     // Update the paddle.
@@ -186,7 +188,6 @@ function offsetForCanvas(position, canvas) {
 
 /** Read 'mid' off of the active url */
 function getUrlMatchId() {
-    let midAttr = "mid";
     let params = window.location.search.substring(1).split(new RegExp("=|\&"));
     var mid = null;
     for (var i = 0; i < params.length - 1; i++) {
@@ -201,7 +202,7 @@ function getUrlMatchId() {
 /** Draw the current game state */
 function drawGame(gameState) {
     const dimensions = constants.dimensions;
-    let context = $("#canvas")
+    let context = $("#canvas").get(0).getContext("2d");
     drawBackground(context, dimensions);
 
     context.fillStyle = "white";
@@ -220,6 +221,7 @@ function drawGame(gameState) {
 
 /** Start the menu flow */
 function runMenu() {
+    $("#interface").css("opacity", 1.0);
     $("#loadingIndicator").css("opacity", 0.0);
     $("#hostAddress").css("opacity", 0.0);
     $("#matchInput").css("opacity", 0.0);
@@ -232,6 +234,7 @@ function runMenu() {
         var continueAnimation = true;
         $("#joinButton").animate({ opacity: 0 });
         animateLoadingIndicator(function() { return continueAnimation; });
+
         let match = runMatch(null);
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
@@ -239,6 +242,10 @@ function runMenu() {
             $("#hostAddress").text(mid);
             continueAnimation = false;
         };
+
+        match.matchStarted = function() {
+            $("#interface").css("opacity", 0.0);
+        }
     });
 }
 
@@ -267,9 +274,9 @@ function animateLoadingIndicator(shouldContinue) {
 }
 
 function drawConnecting() {
-    // const dimensions = constants.dimensions;
-    let context = $("#canvas").getContext("2d");
-    // drawBackground(context, dimensions);
+    const dimensions = constants.dimensions;
+    let context = $("#canvas").get(0).getContext("2d");
+    drawBackground(context, dimensions);
 
     context.fillText("loading...", 0, 0);
 }
@@ -308,9 +315,15 @@ function gameLoop(gameState, connection, inputPosition, time) {
 }
 
 function startup() {
+    $("#interface").css("opacity", 0.0);
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
-    runMenu();
+    let mid = getUrlMatchId()
+    if (mid === null) {
+        runMenu();
+    } else {
+        runMatch(mid);
+    }
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
@@ -361,7 +374,7 @@ function runMatch(mid) {
 
 /** Start up the game loop, read input */
 function runGame(gameState, connection) {
-    let canvas = document.getElementById("canvas");
+    let canvas = $("canvas").get(0);
 
     restoreBallState(gameState, true);
     var inputPosition = new Vector(0, 0);

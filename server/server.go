@@ -115,6 +115,7 @@ func makeMatches(mm *matchMaker) {
 			message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
 			pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
 		} else {
+			log.Println("")
 			mm.matchesPendingLock.Lock()
 			hostConn := mm.matchesPending[pending.mid]
 			delete(mm.matchesPending, pending.mid)
@@ -150,6 +151,7 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	log.Println("match id... %v", mid)
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
