@@ -20,26 +20,27 @@ type matchRequest struct {
 type matchMaker struct {
 	connInput        chan *matchRequest
 	matchRequestLock sync.Mutex
-	matchRequests    map[string]*websocket.Conn
+	matchRequests    map[string]*match
 }
 
 func newMatchMaker() *matchMaker {
 	return &matchMaker{
 		connInput:        make(chan *matchRequest),
 		matchRequestLock: sync.Mutex{},
-		matchRequests:    make(map[string]*websocket.Conn),
+		matchRequests:    make(map[string]*match),
 	}
 }
 
 type match struct {
-	host   *websocket.Conn
-	client *websocket.Conn
+	hostConn   *websocket.Conn
+	mid        string
+	clientChan chan *websocket.Conn
 }
 
 var mm *matchMaker
 
 func runMatch(m *match) {
-	log.Println("Starting a match...")
+	log.Println("Running a match...")
 
 	// For the time being, we keep the connection open and await a pair.
 	ctx := context.Background()
@@ -64,85 +65,99 @@ func runMatch(m *match) {
 		}
 	}
 
+	defer m.hostConn.Close()
+	var client *websocket.Conn
+
+	matchIDMessage := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", m.mid)
+	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(matchIDMessage)); err != nil {
+		cancel()
+		return
+	}
+
 	// For now, the host waits for the client.
 	hostRead := make(chan []byte)
-	clientRead := make(chan []byte)
-	go chanReader(m.host, hostRead, false)
+	go chanReader(m.hostConn, hostRead, false)
+	for client == nil {
+		select {
+		case <-ctx.Done():
+			cancel()
+			log.Println("Failed. Finished match...")
+			return
+		case <-hostRead:
+			break
+		case client = <-m.clientChan:
+			break
+		}
+	}
+
+	log.Println("Client found, starting match...")
 
 	// Kick off the match by sending the `MatchStart` message through both connections.
 	hostStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"
 	clientStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"
-	if err := m.host.WriteMessage(websocket.TextMessage, []byte(hostStart)); err != nil {
+	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(hostStart)); err != nil {
 		cancel()
 	}
-	if err := m.client.WriteMessage(websocket.TextMessage, []byte(clientStart)); err != nil {
+	if err := client.WriteMessage(websocket.TextMessage, []byte(clientStart)); err != nil {
 		cancel()
 	}
 
-	go chanReader(m.client, clientRead, true)
+	clientRead := make(chan []byte)
+	go chanReader(client, clientRead, true)
 
 	// Once started, just relay messages between the two.
 	finished := false
 	for !finished {
 		select {
 		case <-ctx.Done():
-			log.Println("match finished")
 			finished = true
 			break
 		case byt := <-hostRead:
-			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
-				log.Printf("cancel 2")
+			if err := client.WriteMessage(websocket.TextMessage, byt); err != nil {
 				cancel()
 			}
 		case byt := <-clientRead:
-			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
-				log.Printf("cancel 3")
+			if err := m.hostConn.WriteMessage(websocket.TextMessage, byt); err != nil {
 				cancel()
 			}
 		}
 	}
+	log.Println("Match complete...")
 }
 
-func matchHost(request *matchRequest) {
-	// Do the whole mid generation
-	var mid string
-	mm.matchRequestLock.Lock()
-	for {
-		mid = fmt.Sprintf("%04d", rand.Intn(1000))
-		_, ok := mm.matchRequests[mid]
-		if !ok {
-			break
-		}
-	}
-	mm.matchRequests[mid] = request.conn
-	mm.matchRequestLock.Unlock()
-
-	message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
-	request.conn.WriteMessage(websocket.TextMessage, []byte(message))
-}
-
-func matchJoin(pending *matchRequest) {
-	mm.matchRequestLock.Lock()
-	hostConn := mm.matchRequests[pending.mid]
-	delete(mm.matchRequests, pending.mid)
-	mm.matchRequestLock.Unlock()
-
-	if hostConn != nil {
-		m := match{host: hostConn, client: pending.conn}
-		go runMatch(&m)
-	} else {
-		// TODO: Write an error back into the client socket.
-	}
-}
-
-func makeMatches(mm *matchMaker) {
+func serveMatchRequests(mm *matchMaker) {
 	// Host connections wait around here...
 	for {
-		pending := <-mm.connInput
-		if pending.host {
-			matchHost(pending)
+		request := <-mm.connInput
+		if request.host {
+			// Do the whole mid generation
+			var mid string
+			mm.matchRequestLock.Lock()
+			for {
+				mid = fmt.Sprintf("%04d", rand.Intn(1000))
+				_, ok := mm.matchRequests[mid]
+				if !ok {
+					break
+				}
+			}
+			m := match{hostConn: request.conn, mid: mid, clientChan: make(chan *websocket.Conn)}
+			mm.matchRequests[mid] = &m
+			mm.matchRequestLock.Unlock()
+
+			go runMatch(&m)
 		} else {
-			matchJoin(pending)
+			mm.matchRequestLock.Lock()
+			m, ok := mm.matchRequests[request.mid]
+			if ok {
+				delete(mm.matchRequests, request.mid)
+			}
+			mm.matchRequestLock.Unlock()
+
+			if ok {
+				m.clientChan <- request.conn
+			} else {
+				// TODO: Write an error back into the client socket.
+			}
 		}
 	}
 }
@@ -181,8 +196,8 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	} else {
 		log.Println("Upgraded a request...")
-		pending := &matchRequest{host: mid == "", mid: mid, conn: conn}
-		mm.connInput <- pending
+		request := &matchRequest{host: mid == "", mid: mid, conn: conn}
+		mm.connInput <- request
 	}
 }
 
@@ -218,7 +233,7 @@ func runConnection() {
 func main() {
 	mm = newMatchMaker()
 	// go runConnection()
-	go makeMatches(mm)
+	go serveMatchRequests(mm)
 	http.HandleFunc("/", receiveConnection)
 	http.ListenAndServe(":8080", nil)
 }
