@@ -143,7 +143,6 @@ func serveMatchRequests(mm *matchMaker) {
 			m := match{hostConn: request.conn, mid: mid, clientChan: make(chan *websocket.Conn)}
 			mm.matchRequests[mid] = &m
 			mm.matchRequestLock.Unlock()
-
 			go runMatch(&m)
 		} else {
 			mm.matchRequestLock.Lock()
@@ -152,7 +151,6 @@ func serveMatchRequests(mm *matchMaker) {
 				delete(mm.matchRequests, request.mid)
 			}
 			mm.matchRequestLock.Unlock()
-
 			if ok {
 				m.clientChan <- request.conn
 			} else {
