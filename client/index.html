@@ -7,21 +7,25 @@
     <script src="game.js"></script>
 </head>
 <body onload="startup();" style="background-color:black; color:white; font-family:monospace;">
-    <canvas id="canvas" width="500" height="360" class="centered" style="border:10pt solid white;"></canvas>
+    <canvas id="canvas" width="500pt" height="360pt" class="centered" style="border:10pt solid white;"></canvas>
     <div id="interface" class="centered" style="width:500; height:360; background:clear; text-align:center; font:48px Andale Mono;
   border:0px;">
-          <form onsubmit="return false;">
+        <form id="hostJoin" onsubmit="return false;" class="centered" style="height:90pt;">
             <input type="submit" id="hostButton" class="button" value="Host a New Match"><br>
             <input type="submit" id="joinButton" class="button" value="Join a Match"><br>
         </form>  
-        <div id="joinEntry" style="">
-            <div id="joinMessaging" class="message">Enter a host match code...</div>
-              <form onsubmit="return false;" style="padding-top:20pt;">
+        <div id="joinEntry" class="centered" style="height:180pt;">
+            <div id="joinMessaging" class="message">
+                Enter a host match code...
+            </div>
+            <form onsubmit="return false;" style="padding-top:20pt;">
                 <input type="text" id="matchInput" style="border:4pt; border-style:solid; border-color:white; width:130px; text-align:center;" id="blah" class="button">
             </form>
             <div id="joinMessaging" class="message"></div>
         </div>
-         <div id="loadingIndicator">...</div> 
+        <div id="loadingIndicator" class="centered" style="height:40;">
+            ...
+        </div> 
     </div>
     <div id="output"></div>
 </body>

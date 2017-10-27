@@ -231,15 +231,13 @@ function hideInterface() {
 /** Start the menu flow */
 function runMenu() {
     showInterface();
-    $("#loadingIndicator").css("opacity", 0.0);
 
-    $("#joinMessaging").css("opacity", 0.0);
-    $("#matchInput").css("opacity", 0.0);
+    $("#loadingIndicator").hide();
+    $("#joinEntry").hide();
 
     $("#hostButton").click(function() {
         var continueAnimation = true;
-        $("#hostButton").animate({ opacity: 0 });
-        $("#joinButton").animate({ opacity: 0 });
+        $("#hostJoin").hide();
         animateLoadingIndicator(function() { return continueAnimation; });
 
         let match = runMatch(null);
@@ -257,9 +255,8 @@ function runMenu() {
     });
 
     $("#joinButton").click(function() {
-        $("#hostButton").animate({ opacity: 0 });
-        $("#joinButton").animate({ opacity: 0 });
-        $("#joinMessaging").animate({ opacity: 1.0 });
+        $("#hostJoin").hide();
+        $("#joinEntry").show();
         $("#matchInput").css("opacity", 1.0);
         $("#matchInput").get(0).focus();
         $("#matchInput").keyup(function() {
@@ -276,7 +273,7 @@ function runMenu() {
 
 function animateLoadingIndicator(shouldContinue) {
     let element =  $("#loadingIndicator");
-    element.css("opacity", 1.0);
+    element.show();
     let interval = 400;
     element.text(" ");
     window.setTimeout(function() {
@@ -290,7 +287,7 @@ function animateLoadingIndicator(shouldContinue) {
                         animateLoadingIndicator(shouldContinue);
                     }
                     else {
-                        element.css("opacity", 0.0);
+                        element.hide();
                     }
                 }, interval);
             }, interval);
