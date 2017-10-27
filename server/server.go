@@ -11,23 +11,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type matchPending struct {
+type matchRequest struct {
 	host bool
 	mid  string
 	conn *websocket.Conn
 }
 
 type matchMaker struct {
-	connInput          chan *matchPending
-	matchesPendingLock sync.Mutex
-	matchesPending     map[string]*websocket.Conn
+	connInput        chan *matchRequest
+	matchRequestLock sync.Mutex
+	matchRequests    map[string]*websocket.Conn
 }
 
 func newMatchMaker() *matchMaker {
 	return &matchMaker{
-		connInput:          make(chan *matchPending),
-		matchesPendingLock: sync.Mutex{},
-		matchesPending:     make(map[string]*websocket.Conn),
+		connInput:        make(chan *matchRequest),
+		matchRequestLock: sync.Mutex{},
+		matchRequests:    make(map[string]*websocket.Conn),
 	}
 }
 
@@ -38,7 +38,7 @@ type match struct {
 
 var mm *matchMaker
 
-func startMatch(m *match) {
+func runMatch(m *match) {
 	log.Println("Starting a match...")
 
 	// For the time being, we keep the connection open and await a pair.
@@ -64,6 +64,11 @@ func startMatch(m *match) {
 		}
 	}
 
+	// For now, the host waits for the client.
+	hostRead := make(chan []byte)
+	clientRead := make(chan []byte)
+	go chanReader(m.host, hostRead, false)
+
 	// Kick off the match by sending the `MatchStart` message through both connections.
 	hostStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"
 	clientStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"
@@ -74,10 +79,6 @@ func startMatch(m *match) {
 		cancel()
 	}
 
-	hostRead := make(chan []byte)
-	clientRead := make(chan []byte)
-
-	go chanReader(m.host, hostRead, false)
 	go chanReader(m.client, clientRead, true)
 
 	// Once started, just relay messages between the two.
@@ -102,59 +103,33 @@ func startMatch(m *match) {
 	}
 }
 
-func matchHost(pending *matchPending) {
+func matchHost(request *matchRequest) {
+	// Do the whole mid generation
 	var mid string
-	mm.matchesPendingLock.Lock()
+	mm.matchRequestLock.Lock()
 	for {
 		mid = fmt.Sprintf("%04d", rand.Intn(1000))
-		_, ok := mm.matchesPending[mid]
+		_, ok := mm.matchRequests[mid]
 		if !ok {
 			break
 		}
 	}
-	mm.matchesPending[mid] = pending.conn
-	mm.matchesPendingLock.Unlock()
-
-	// Keep the connection alive / remove it from pending hosts if disconnected.
-	go func() {
-		for {
-			mm.matchesPendingLock.Lock()
-			hostConn, ok := mm.matchesPending[mid]
-			mm.matchesPendingLock.Unlock()
-			if !ok {
-				log.Println("no longer pending")
-				break
-			}
-
-			log.Println("evaluating connection...")
-
-			_, byt, err := hostConn.ReadMessage()
-			if err != nil {
-				log.Println("connection error, closing...")
-				pending.conn.Close()
-				mm.matchesPendingLock.Lock()
-				delete(mm.matchesPending, mid)
-				mm.matchesPendingLock.Unlock()
-				break
-			}
-
-			log.Println("read from keep alive", string(byt))
-		}
-	}()
+	mm.matchRequests[mid] = request.conn
+	mm.matchRequestLock.Unlock()
 
 	message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
-	pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
+	request.conn.WriteMessage(websocket.TextMessage, []byte(message))
 }
 
-func matchJoin(pending *matchPending) {
-	mm.matchesPendingLock.Lock()
-	hostConn := mm.matchesPending[pending.mid]
-	delete(mm.matchesPending, pending.mid)
-	mm.matchesPendingLock.Unlock()
+func matchJoin(pending *matchRequest) {
+	mm.matchRequestLock.Lock()
+	hostConn := mm.matchRequests[pending.mid]
+	delete(mm.matchRequests, pending.mid)
+	mm.matchRequestLock.Unlock()
 
 	if hostConn != nil {
 		m := match{host: hostConn, client: pending.conn}
-		go startMatch(&m)
+		go runMatch(&m)
 	} else {
 		// TODO: Write an error back into the client socket.
 	}
@@ -179,12 +154,12 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	mids := r.URL.Query()["mid"]
 	if len(mids) > 0 {
 		mid = mids[0]
-		mm.matchesPendingLock.Lock()
-		_, ok := mm.matchesPending[mid]
+		mm.matchRequestLock.Lock()
+		_, ok := mm.matchRequests[mid]
 		if !ok {
 			log.Println("no match found :(")
 		}
-		mm.matchesPendingLock.Unlock()
+		mm.matchRequestLock.Unlock()
 
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -206,7 +181,7 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	} else {
 		log.Println("Upgraded a request...")
-		pending := &matchPending{host: mid == "", mid: mid, conn: conn}
+		pending := &matchRequest{host: mid == "", mid: mid, conn: conn}
 		mm.connInput <- pending
 	}
 }
