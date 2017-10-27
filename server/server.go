@@ -13,7 +13,7 @@ import (
 
 type matchPending struct {
 	host bool
-	mid string
+	mid  string
 	conn *websocket.Conn
 }
 
@@ -93,40 +93,67 @@ func startMatch(m *match) {
 	}
 }
 
+func matchHost(pending *matchPending) {
+	var mid string
+	mm.matchesPendingLock.Lock()
+	for {
+		mid = fmt.Sprintf("%04d", rand.Intn(1000))
+		_, ok := mm.matchesPending[mid]
+		if !ok {
+			break
+		}
+	}
+	mm.matchesPending[mid] = pending.conn
+	mm.matchesPendingLock.Unlock()
+
+	// Keep the connection alive / remove it from pending hosts if disconnected.
+	go func() {
+		for {
+			log.Println("evaluating connection...")
+			mm.matchesPendingLock.Lock()
+			hostConn, ok := mm.matchesPending[mid]
+			mm.matchesPendingLock.Unlock()
+			if !ok {
+				break
+			}
+
+			if _, _, err := hostConn.NextReader(); err != nil {
+				log.Println("connection error, closing...")
+				pending.conn.Close()
+				mm.matchesPendingLock.Lock()
+				delete(mm.matchesPending, mid)
+				mm.matchesPendingLock.Unlock()
+				break
+			}
+		}
+	}()
+
+	message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
+	pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
+}
+
+func matchJoin(pending *matchPending) {
+	mm.matchesPendingLock.Lock()
+	hostConn := mm.matchesPending[pending.mid]
+	delete(mm.matchesPending, pending.mid)
+	mm.matchesPendingLock.Unlock()
+
+	if hostConn != nil {
+		m := match{host: hostConn, client: pending.conn}
+		go startMatch(&m)
+	} else {
+		// TODO: Write an error back into the client socket.
+	}
+}
+
 func makeMatches(mm *matchMaker) {
 	// Host connections wait around here...
-	// TODO: Keep-alive for all websocket connections.
 	for {
-		log.Println("Got a pending match...")
 		pending := <-mm.connInput
 		if pending.host {
-			var mid string
-			mm.matchesPendingLock.Lock()
-			for {
-				mid = fmt.Sprintf("%04d", rand.Intn(1000))
-				_, ok := mm.matchesPending[mid]
-				if !ok {
-					break
-				}
-			}
-			mm.matchesPending[mid] = pending.conn
-			mm.matchesPendingLock.Unlock()
-
-			message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
-			pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
+			matchHost(pending)
 		} else {
-			log.Println("")
-			mm.matchesPendingLock.Lock()
-			hostConn := mm.matchesPending[pending.mid]
-			delete(mm.matchesPending, pending.mid)
-			mm.matchesPendingLock.Unlock()
-
-			if hostConn != nil {
-				m := match{host: hostConn, client: pending.conn}
-				go startMatch(&m)
-			} else {
-				// TODO: Write an error back into the client socket.
-			}
+			matchJoin(pending)
 		}
 	}
 }
@@ -151,7 +178,6 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	log.Println("match id... %v", mid)
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
