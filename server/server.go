@@ -64,29 +64,38 @@ func startMatch(m *match) {
 		}
 	}
 
+	// Kick off the match by sending the `MatchStart` message through both connections.
+	hostStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"
+	clientStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"
+	if err := m.host.WriteMessage(websocket.TextMessage, []byte(hostStart)); err != nil {
+		cancel()
+	}
+	if err := m.client.WriteMessage(websocket.TextMessage, []byte(clientStart)); err != nil {
+		cancel()
+	}
+
 	hostRead := make(chan []byte)
 	clientRead := make(chan []byte)
 
 	go chanReader(m.host, hostRead, false)
 	go chanReader(m.client, clientRead, true)
 
-	// Kick off the match by sending the `MatchStart` message through both connections.
-	m.host.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"))
-	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
-
 	// Once started, just relay messages between the two.
 	finished := false
 	for !finished {
 		select {
 		case <-ctx.Done():
+			log.Println("match finished")
 			finished = true
 			break
 		case byt := <-hostRead:
 			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
+				log.Printf("cancel 2")
 				cancel()
 			}
 		case byt := <-clientRead:
 			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
+				log.Printf("cancel 3")
 				cancel()
 			}
 		}
@@ -109,15 +118,18 @@ func matchHost(pending *matchPending) {
 	// Keep the connection alive / remove it from pending hosts if disconnected.
 	go func() {
 		for {
-			log.Println("evaluating connection...")
 			mm.matchesPendingLock.Lock()
 			hostConn, ok := mm.matchesPending[mid]
 			mm.matchesPendingLock.Unlock()
 			if !ok {
+				log.Println("no longer pending")
 				break
 			}
 
-			if _, _, err := hostConn.NextReader(); err != nil {
+			log.Println("evaluating connection...")
+
+			_, byt, err := hostConn.ReadMessage()
+			if err != nil {
 				log.Println("connection error, closing...")
 				pending.conn.Close()
 				mm.matchesPendingLock.Lock()
@@ -125,6 +137,8 @@ func matchHost(pending *matchPending) {
 				mm.matchesPendingLock.Unlock()
 				break
 			}
+
+			log.Println("read from keep alive", string(byt))
 		}
 	}()
 
