@@ -11,35 +11,36 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type matchPending struct {
+type matchRequest struct {
 	host bool
-	mid string
+	mid  string
 	conn *websocket.Conn
 }
 
 type matchMaker struct {
-	connInput          chan *matchPending
-	matchesPendingLock sync.Mutex
-	matchesPending     map[string]*websocket.Conn
+	connInput        chan *matchRequest
+	matchRequestLock sync.Mutex
+	matchRequests    map[string]*match
 }
 
 func newMatchMaker() *matchMaker {
 	return &matchMaker{
-		connInput:          make(chan *matchPending),
-		matchesPendingLock: sync.Mutex{},
-		matchesPending:     make(map[string]*websocket.Conn),
+		connInput:        make(chan *matchRequest),
+		matchRequestLock: sync.Mutex{},
+		matchRequests:    make(map[string]*match),
 	}
 }
 
 type match struct {
-	host   *websocket.Conn
-	client *websocket.Conn
+	hostConn   *websocket.Conn
+	mid        string
+	clientChan chan *websocket.Conn
 }
 
 var mm *matchMaker
 
-func startMatch(m *match) {
-	log.Println("Starting a match...")
+func runMatch(m *match) {
+	log.Println("Running a match...")
 
 	// For the time being, we keep the connection open and await a pair.
 	ctx := context.Background()
@@ -64,15 +65,45 @@ func startMatch(m *match) {
 		}
 	}
 
-	hostRead := make(chan []byte)
-	clientRead := make(chan []byte)
+	defer m.hostConn.Close()
+	var client *websocket.Conn
 
-	go chanReader(m.host, hostRead, false)
-	go chanReader(m.client, clientRead, true)
+	matchIDMessage := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", m.mid)
+	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(matchIDMessage)); err != nil {
+		cancel()
+		return
+	}
+
+	// For now, the host waits for the client.
+	hostRead := make(chan []byte)
+	go chanReader(m.hostConn, hostRead, false)
+	for client == nil {
+		select {
+		case <-ctx.Done():
+			cancel()
+			log.Println("Failed. Finished match...")
+			return
+		case <-hostRead:
+			break
+		case client = <-m.clientChan:
+			break
+		}
+	}
+
+	log.Println("Client found, starting match...")
 
 	// Kick off the match by sending the `MatchStart` message through both connections.
-	m.host.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"))
-	m.client.WriteMessage(websocket.TextMessage, []byte("{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"))
+	hostStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"
+	clientStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"
+	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(hostStart)); err != nil {
+		cancel()
+	}
+	if err := client.WriteMessage(websocket.TextMessage, []byte(clientStart)); err != nil {
+		cancel()
+	}
+
+	clientRead := make(chan []byte)
+	go chanReader(client, clientRead, true)
 
 	// Once started, just relay messages between the two.
 	finished := false
@@ -82,48 +113,46 @@ func startMatch(m *match) {
 			finished = true
 			break
 		case byt := <-hostRead:
-			if err := m.client.WriteMessage(websocket.TextMessage, byt); err != nil {
+			if err := client.WriteMessage(websocket.TextMessage, byt); err != nil {
 				cancel()
 			}
 		case byt := <-clientRead:
-			if err := m.host.WriteMessage(websocket.TextMessage, byt); err != nil {
+			if err := m.hostConn.WriteMessage(websocket.TextMessage, byt); err != nil {
 				cancel()
 			}
 		}
 	}
+	log.Println("Match complete...")
 }
 
-func makeMatches(mm *matchMaker) {
+func serveMatchRequests(mm *matchMaker) {
 	// Host connections wait around here...
-	// TODO: Keep-alive for all websocket connections.
 	for {
-		log.Println("Got a pending match...")
-		pending := <-mm.connInput
-		if pending.host {
+		request := <-mm.connInput
+		if request.host {
+			// Do the whole mid generation
 			var mid string
-			mm.matchesPendingLock.Lock()
+			mm.matchRequestLock.Lock()
 			for {
 				mid = fmt.Sprintf("%04d", rand.Intn(1000))
-				_, ok := mm.matchesPending[mid]
+				_, ok := mm.matchRequests[mid]
 				if !ok {
 					break
 				}
 			}
-			mm.matchesPending[mid] = pending.conn
-			mm.matchesPendingLock.Unlock()
-
-			message := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", mid)
-			pending.conn.WriteMessage(websocket.TextMessage, []byte(message))
+			m := match{hostConn: request.conn, mid: mid, clientChan: make(chan *websocket.Conn)}
+			mm.matchRequests[mid] = &m
+			mm.matchRequestLock.Unlock()
+			go runMatch(&m)
 		} else {
-			log.Println("")
-			mm.matchesPendingLock.Lock()
-			hostConn := mm.matchesPending[pending.mid]
-			delete(mm.matchesPending, pending.mid)
-			mm.matchesPendingLock.Unlock()
-
-			if hostConn != nil {
-				m := match{host: hostConn, client: pending.conn}
-				go startMatch(&m)
+			mm.matchRequestLock.Lock()
+			m, ok := mm.matchRequests[request.mid]
+			if ok {
+				delete(mm.matchRequests, request.mid)
+			}
+			mm.matchRequestLock.Unlock()
+			if ok {
+				m.clientChan <- request.conn
 			} else {
 				// TODO: Write an error back into the client socket.
 			}
@@ -138,12 +167,12 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 	mids := r.URL.Query()["mid"]
 	if len(mids) > 0 {
 		mid = mids[0]
-		mm.matchesPendingLock.Lock()
-		_, ok := mm.matchesPending[mid]
+		mm.matchRequestLock.Lock()
+		_, ok := mm.matchRequests[mid]
 		if !ok {
 			log.Println("no match found :(")
 		}
-		mm.matchesPendingLock.Unlock()
+		mm.matchRequestLock.Unlock()
 
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -151,7 +180,6 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	log.Println("match id... %v", mid)
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -166,8 +194,8 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	} else {
 		log.Println("Upgraded a request...")
-		pending := &matchPending{host: mid == "", mid: mid, conn: conn}
-		mm.connInput <- pending
+		request := &matchRequest{host: mid == "", mid: mid, conn: conn}
+		mm.connInput <- request
 	}
 }
 
@@ -203,7 +231,7 @@ func runConnection() {
 func main() {
 	mm = newMatchMaker()
 	// go runConnection()
-	go makeMatches(mm)
+	go serveMatchRequests(mm)
 	http.HandleFunc("/", receiveConnection)
 	http.ListenAndServe(":8080", nil)
 }
