@@ -240,12 +240,13 @@ function runMenu() {
         var continueAnimation = true;
         $("#hostJoin").hide();
         $("#hostEntry").show();
+        $("#hostMessaging").hide();
         animateLoadingIndicator(function() { return continueAnimation; });
 
         let match = runMatch(null);
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
-            $("#interface").append('<div id="hostAddress"></div>')
+            $("#interface").append('<div id="hostAddress"></div>');
             $("#hostAddress").text(mid);
             continueAnimation = false;
         };
@@ -256,17 +257,20 @@ function runMenu() {
         }
 
         match.connectionError = function() {
-            alert("error!");
+            $("#hostMessaging").text("Failed to connect to the server and start a hosted match.");
+            $("#hostMessaging").show();
+            continueAnimation = false;
         }
 
         match.connectionClosed = function() {
-            alert("closed!");
         }
     });
 
     $("#joinButton").click(function() {
         $("#hostJoin").hide();
         $("#joinEntry").show();
+        $("#joinMessaging").hide();
+
         $("#matchInput").css("opacity", 1.0);
         $("#matchInput").get(0).focus();
         $("#matchInput").keyup(function() {
