@@ -234,10 +234,12 @@ function runMenu() {
 
     $("#loadingIndicator").hide();
     $("#joinEntry").hide();
+    $("#hostEntry").hide();
 
     $("#hostButton").click(function() {
         var continueAnimation = true;
         $("#hostJoin").hide();
+        $("#hostEntry").show();
         animateLoadingIndicator(function() { return continueAnimation; });
 
         let match = runMatch(null);
@@ -251,6 +253,14 @@ function runMenu() {
         match.matchStarted = function() {
             $("#hostAddress").remove();
             hideInterface();
+        }
+
+        match.connectionError = function() {
+            alert("error!");
+        }
+
+        match.connectionClosed = function() {
+            alert("closed!");
         }
     });
 

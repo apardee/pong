@@ -24,14 +24,18 @@
   right: 0; 
 }
 
+.title {
+  font:20pt Andale Mono;
+}
+
 .message {
-  font:16px Andale Mono;
+  font:12pt Andale Mono;
 }
 
 .textEntry button {
   border:4pt;
   border-style:solid;
   border-color:white;
-  width:130px;
+  width:130pt;
   text-align:center;
 }
