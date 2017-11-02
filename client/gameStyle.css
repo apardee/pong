@@ -1,16 +1,17 @@
-.button, .textEntry {
-  color: #FFF;
+.button, .textEntry, .returnButton {
+  color: white;
   background-color:black;
-  font:48px Andale Mono;
-  border:0px;
+  font:32pt Andale Mono;
+  border:0;
+  text-decoration: underline;
 }
 
-.button:active {
+.button:active, .returnButton:active {
     outline: none;
     border: none;
 }
 
-.button:selected {
+.button:selected, .returnButton:active {
   outline: none;
   border: none;
 }
@@ -22,6 +23,20 @@
   bottom: 0;
   left: 0;
   right: 0; 
+}
+
+.return {
+  position: absolute;
+  margin: 0;
+  top: 244pt;
+  bottom: 0;
+  left: 0;
+  right: 0; 
+  height: 20pt;
+}
+
+.returnButton {
+  font:12pt Andale Mono;
 }
 
 .title {

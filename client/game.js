@@ -219,22 +219,20 @@ function drawGame(gameState) {
     context.restore();
 }
 
-function showInterface() {
-    // TODO: add / remove the div
-    $("#interface").css("opacity", 1.0);
-}
-
-function hideInterface() {
-    $("#interface").css("opacity", 0.0);
-}
-
 /** Start the menu flow */
 function runMenu() {
-    showInterface();
+    $("#interface").show();
+    $("#hostJoin").show();
 
     $("#loadingIndicator").hide();
     $("#joinEntry").hide();
     $("#hostEntry").hide();
+    $("#return").hide();
+
+    $("#returnButton").click(function() {
+        runMenu(); // XXX
+        log("return pressed!");
+    });
 
     $("#hostButton").click(function() {
         $("#hostJoin").hide();
@@ -252,12 +250,13 @@ function runMenu() {
 
         match.matchStarted = function() {
             $("#hostAddress").remove();
-            hideInterface();
+            $("#interface").hide();
         }
 
         match.connectionError = function() {
             $("#hostMessaging").text("Couldn't connect to the server to host a match.");
             $("#hostMessaging").show();
+            $("#return").show();
             stopLoadingIndicator(indicatorState);
         }
 
@@ -272,20 +271,21 @@ function runMenu() {
 
         $("#matchInput").css("opacity", 1.0);
         $("#matchInput").get(0).focus();
-        $("#matchInput").keyup(function() {
+        $("#matchInput").keyup(function() { // XXX TODO: There can probably only be one of these
             let value = $("#matchInput").val();
             if (value.length == 4) {
                 let indicatorState = startLoadingIndicator();
 
                 let match = runMatch(value);
                 match.matchStarted = function() {
-                    hideInterface();
+                    $("#interface").hide();
                     stopLoadingIndicator(indicatorState);
                 }
 
                 match.connectionError = function() {
                     $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
                     $("#joinMessaging").show();
+                    $("#return").show();
                     stopLoadingIndicator(indicatorState);
                 }
         
@@ -378,7 +378,7 @@ function gameLoop(gameState, connection, inputPosition, time) {
 }
 
 function startup() {
-    $("#interface").css("opacity", 0.0);
+    $("#interface").hide();
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
     let mid = getUrlMatchId()
