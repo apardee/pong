@@ -220,7 +220,8 @@ function drawGame(gameState) {
 }
 
 /** Start the menu flow */
-function runMenu() {
+function runMenu(inputContext) {
+    inputContext.reset();
     $("#interface").show();
     $("#hostJoin").show();
 
@@ -229,12 +230,12 @@ function runMenu() {
     $("#hostEntry").hide();
     $("#return").hide();
 
-    $("#returnButton").click(function() {
-        runMenu(); // XXX
+    inputContext.returnPressed = function() {
+        runMenu(inputContext);
         log("return pressed!");
-    });
+    };
 
-    $("#hostButton").click(function() {
+    inputContext.hostPressed = function() {
         $("#hostJoin").hide();
         $("#hostEntry").show();
         $("#hostMessaging").hide();
@@ -262,16 +263,16 @@ function runMenu() {
 
         match.connectionClosed = function() {
         }
-    });
+    };
 
-    $("#joinButton").click(function() {
+    inputContext.joinPressed = function() {
         $("#hostJoin").hide();
         $("#joinEntry").show();
         $("#joinMessaging").hide();
 
         $("#matchInput").css("opacity", 1.0);
         $("#matchInput").get(0).focus();
-        $("#matchInput").keyup(function() { // XXX TODO: There can probably only be one of these
+        inputContext.matchInputChanged = function() {
             let value = $("#matchInput").val();
             if (value.length == 4) {
                 let indicatorState = startLoadingIndicator();
@@ -294,8 +295,8 @@ function runMenu() {
             } else {
                 $("#joinMessaging").text("");
             }
-        })
-    });
+        }
+    };
 }
 
 function startLoadingIndicator() {
@@ -377,13 +378,32 @@ function gameLoop(gameState, connection, inputPosition, time) {
     });
 }
 
+function setupInputContext() {
+    let inputContext = {
+        reset: function() {
+            inputContext.returnPressed = function() {};
+            inputContext.joinPressed =  function() {};
+            inputContext.hostPressed =  function() {};
+            inputContext.matchInputChanged =  function() {};
+        }
+    }
+    inputContext.reset();
+    $("#returnButton").click(function() { inputContext.returnPressed(); });
+    $("#joinButton").click(function() { inputContext.joinPressed(); });
+    $("#hostButton").click(function() { inputContext.hostPressed(); });
+    $("#matchInput").keyup(function() { inputContext.matchInputChanged(); });
+    return inputContext;
+}
+
 function startup() {
+    let inputContext = setupInputContext();
+
     $("#interface").hide();
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
     let mid = getUrlMatchId()
     if (mid === null) {
-        runMenu();
+        runMenu(inputContext);
     } else {
         runMatch(mid);
     }
