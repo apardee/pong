@@ -229,6 +229,7 @@ function runMenu(inputContext) {
     $("#joinEntry").hide();
     $("#hostEntry").hide();
     $("#return").hide();
+    $("#hostAddress").hide();
 
     inputContext.returnPressed = function() {
         runMenu(inputContext);
@@ -244,13 +245,12 @@ function runMenu(inputContext) {
         let match = runMatch(null);
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
-            $("#interface").append('<div id="hostAddress"></div>');
             $("#hostAddress").text(mid);
+            $("#hostAddress").show();
             stopLoadingIndicator(indicatorState);
         };
 
         match.matchStarted = function() {
-            $("#hostAddress").remove();
             $("#interface").hide();
         }
 
