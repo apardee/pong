@@ -237,18 +237,17 @@ function runMenu() {
     $("#hostEntry").hide();
 
     $("#hostButton").click(function() {
-        var continueAnimation = true;
         $("#hostJoin").hide();
         $("#hostEntry").show();
         $("#hostMessaging").hide();
-        animateLoadingIndicator(function() { return continueAnimation; });
 
+        let indicatorState = startLoadingIndicator();
         let match = runMatch(null);
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
             $("#interface").append('<div id="hostAddress"></div>');
             $("#hostAddress").text(mid);
-            continueAnimation = false;
+            stopLoadingIndicator(indicatorState);
         };
 
         match.matchStarted = function() {
@@ -257,9 +256,9 @@ function runMenu() {
         }
 
         match.connectionError = function() {
-            $("#hostMessaging").text("Failed to connect to the server and start a hosted match.");
+            $("#hostMessaging").text("Couldn't connect to the server to host a match.");
             $("#hostMessaging").show();
-            continueAnimation = false;
+            stopLoadingIndicator(indicatorState);
         }
 
         match.connectionClosed = function() {
@@ -276,13 +275,44 @@ function runMenu() {
         $("#matchInput").keyup(function() {
             let value = $("#matchInput").val();
             if (value.length == 4) {
+                let indicatorState = startLoadingIndicator();
+
                 let match = runMatch(value);
                 match.matchStarted = function() {
                     hideInterface();
+                    stopLoadingIndicator(indicatorState);
                 }
+
+                match.connectionError = function() {
+                    $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
+                    $("#joinMessaging").show();
+                    stopLoadingIndicator(indicatorState);
+                }
+        
+                match.connectionClosed = function() {
+                }
+            } else {
+                $("#joinMessaging").text("");
             }
         })
     });
+}
+
+function startLoadingIndicator() {
+    var state = {
+        shouldContinue : true
+    }
+
+    animateLoadingIndicator(function() {
+        return state.shouldContinue;
+    });
+
+    return state;
+}
+
+function stopLoadingIndicator(state) {
+    state.shouldContinue = false;
+    $("#loadingIndicator").hide();
 }
 
 function animateLoadingIndicator(shouldContinue) {
@@ -299,9 +329,6 @@ function animateLoadingIndicator(shouldContinue) {
                 window.setTimeout(function() {
                     if (shouldContinue()) {
                         animateLoadingIndicator(shouldContinue);
-                    }
-                    else {
-                        element.hide();
                     }
                 }, interval);
             }, interval);
