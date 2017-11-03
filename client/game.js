@@ -417,6 +417,7 @@ function setupInputContext() {
     return inputContext;
 }
 
+/** Entry point from document.onload */
 function startup() {
     let inputContext = setupInputContext();
 
@@ -433,11 +434,17 @@ function startup() {
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
 function runMatch(mid) {
-    let match = {
+    // Callbacks to the match UI.
+    let matchCallbacks = {
         midReceived: function(mid) {},
         matchStarted: function() {},
         matchEnded: function() {},
         connectionError: function() {},
+        connectionClosed: function() {}
+    };
+
+    // Callbacks to the running game.
+    let gameCallbacks = {
         connectionClosed: function() {}
     };
 
@@ -449,26 +456,25 @@ function runMatch(mid) {
     
     let ws = new WebSocket(gameUrl);
     ws.onerror = function(event) {
-        log("error!");
-        match.connectionError();
+        matchCallbacks.connectionError();
+        gameCallbacks.connectionClosed();
     }
     ws.onopen = function(event) {
-        log("connected!");
     }
     ws.onclose = function(event) {
-        log("close!");
-        match.connectionClosed();
+        matchCallbacks.connectionClosed();
+        gameCallbacks.connectionClosed();
     }
     ws.onmessage = function(event) {
         // log("rx: " + event.data);
         let message = JSON.parse(event.data);
         if (message.type === MessageType.MatchId) {
-            match.midReceived(message.payload.mid);
+            matchCallbacks.midReceived(message.payload.mid);
         }
         else if (message.type === MessageType.MatchStart) {
-            match.matchStarted();
+            matchCallbacks.matchStarted();
             gameState.role = message.payload.role;
-            runGame(gameState, ws);
+            runGame(gameState, ws, gameCallbacks);
         }
         else if (message.type === MessageType.InputTx) {
             // TODO :Use the input position for the second paddle
@@ -477,12 +483,16 @@ function runMatch(mid) {
             unpackGameStateMessage(message.payload, gameState);
         }
     }
-
-    return match;
+    return matchCallbacks;
 }
 
 /** Start up the game loop, read input */
-function runGame(gameState, connection) {
+function runGame(gameState, connection, callbacks) {
+    var gameActive = true;
+    callbacks.connectionClosed = function() {
+        gameActive = false;
+    }
+
     let canvas = $("canvas").get(0);
 
     restoreBallState(gameState, true);
@@ -495,8 +505,10 @@ function runGame(gameState, connection) {
     };
 
     let runLoop = function(time) {
-        gameLoop(gameState, connection, inputPosition, time);
-        window.requestAnimationFrame(runLoop);
+        if (gameActive) {
+            gameLoop(gameState, connection, inputPosition, time);
+            window.requestAnimationFrame(runLoop);
+        }
     };
     window.requestAnimationFrame(runLoop);
 }
