@@ -10,9 +10,11 @@
     <canvas id="canvas" width="500pt" height="360pt" class="centered" style="border:10pt solid white;"></canvas>
     <div id="interface" class="centered" style="width:500; height:360; background:clear; text-align:center; font:48pt Andale Mono;
   border:0pt;">
+        <div id="background" class="centered" style="background-color:#000000aa;"></div>
         <form id="hostJoin" onsubmit="return false;" class="centered" style="height:90pt;">
             <input type="submit" id="hostButton" class="button" value="Host a New Match"><br>
             <input type="submit" id="joinButton" class="button" value="Join a Match"><br>
+            <div id="hostJoinError" class="message"></div>
         </form>  
         <div id="joinEntry" class="centered" style="height:180pt;">
             <div id="joinTitle" class="title">

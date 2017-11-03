@@ -242,7 +242,10 @@ function runMenu(inputContext, message) {
     $("#hostAddress").hide();
 
     if (message != null) {
-        alert(message);
+        $("#hostJoinError").show();
+        $("#hostJoinError").text(message);
+    } else {
+        $("#hostJoinError").hide();
     }
 
     inputContext.returnPressed = function() {
@@ -251,76 +254,84 @@ function runMenu(inputContext, message) {
     };
 
     inputContext.hostPressed = function() {
-        $("#hostJoin").hide();
-        $("#hostEntry").show();
-        $("#hostMessaging").hide();
-
-        let indicatorState = startLoadingIndicator();
-        let match = runMatch(null);
-        var errorFirst = false;
-        match.midReceived = function(mid) {
-            $("#loadingIndicator").css("opacity", 0.0);
-            $("#hostAddress").text(mid);
-            $("#hostAddress").show();
-            stopLoadingIndicator(indicatorState);
-        };
-
-        match.matchStarted = function() {
-            $("#interface").hide();
-        }
-
-        match.connectionError = function() {
-            $("#hostMessaging").text("Couldn't connect to the server to host a match.");
-            $("#hostMessaging").show();
-            $("#return").show();
-            stopLoadingIndicator(indicatorState);
-            errorFirst = true;
-        }
-
-        match.connectionClosed = function() {
-            if (errorFirst == false) {
-                runMenu(inputContext, "Connection lost!");
-            }
-        }
+       showHostOptions(inputContext);
     };
 
     inputContext.joinPressed = function() {
-        $("#hostJoin").hide();
-        $("#joinEntry").show();
-        $("#joinMessaging").hide();
-
-        $("#matchInput").show();
-        $("#matchInput").get(0).focus();
-        inputContext.matchInputChanged = function() {
-            let value = $("#matchInput").val();
-            if (value.length == 4) {
-                let indicatorState = startLoadingIndicator();
-                var errorFirst = false;
-
-                let match = runMatch(value);
-                match.matchStarted = function() {
-                    $("#interface").hide();
-                    stopLoadingIndicator(indicatorState);
-                }
-
-                match.connectionError = function() {
-                    $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
-                    $("#joinMessaging").show();
-                    $("#return").show();
-                    stopLoadingIndicator(indicatorState);
-                    errorFirst = true;
-                }
-        
-                match.connectionClosed = function() {
-                    if (errorFirst == false) {
-                        runMenu(inputContext, "Connection lost!");
-                    }
-                }
-            } else {
-                $("#joinMessaging").text("");
-            }
-        }
+       showJoinOptions(inputContext);
     };
+}
+
+function showHostOptions(inputContext) {
+    $("#hostJoin").hide();
+    $("#hostEntry").show();
+    $("#hostMessaging").hide();
+
+    let indicatorState = startLoadingIndicator();
+    let match = runMatch(null);
+    var errorFirst = false;
+    match.midReceived = function(mid) {
+        $("#loadingIndicator").css("opacity", 0.0);
+        $("#hostAddress").text(mid);
+        $("#hostAddress").show();
+        stopLoadingIndicator(indicatorState);
+    };
+
+    match.matchStarted = function() {
+        $("#interface").hide();
+    }
+
+    match.connectionError = function() {
+        $("#hostMessaging").text("Couldn't connect to the server to host a match.");
+        $("#hostMessaging").show();
+        $("#return").show();
+        stopLoadingIndicator(indicatorState);
+        errorFirst = true;
+    }
+
+    match.connectionClosed = function() {
+        if (errorFirst == false) {
+            runMenu(inputContext, "Connection lost!");
+        }
+    }
+}
+
+function showJoinOptions(inputContext) {
+    $("#hostJoin").hide();
+    $("#joinEntry").show();
+    $("#joinMessaging").hide();
+
+    $("#matchInput").show();
+    $("#matchInput").get(0).focus();
+    inputContext.matchInputChanged = function() {
+        let value = $("#matchInput").val();
+        if (value.length == 4) {
+            let indicatorState = startLoadingIndicator();
+            var errorFirst = false;
+
+            let match = runMatch(value);
+            match.matchStarted = function() {
+                $("#interface").hide();
+                stopLoadingIndicator(indicatorState);
+            }
+
+            match.connectionError = function() {
+                $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
+                $("#joinMessaging").show();
+                $("#return").show();
+                stopLoadingIndicator(indicatorState);
+                errorFirst = true;
+            }
+    
+            match.connectionClosed = function() {
+                if (errorFirst == false) {
+                    runMenu(inputContext, "Connection lost!");
+                }
+            }
+        } else {
+            $("#joinMessaging").text("");
+        }
+    }
 }
 
 function startLoadingIndicator() {
