@@ -7,8 +7,9 @@ function log(message) {
 const MessageType = {
     MatchId: "MatchId",
     MatchStart: "MatchStart",
+    MatchComplete: "MatchComplete",
     InputTx: "InputTx",
-    GameStateTx: "GameStateTx"
+    GameStateTx: "GameStateTx",
 };
 
 const State = {
@@ -32,6 +33,14 @@ class Vector {
     }
 }
 
+let Constants = {
+    dimensions: new Vector(500.0, 360.0),
+    ballSpeed: 50,
+    maxReflect: Math.PI / 3.0,
+    digitContext: BlockDigit.createContext(40, 80, 10),
+    winScore: 1
+}
+
 class GameObject {
     constructor(position, velocity, size) {
         this.position = position ? position : Vector(0, 0);
@@ -45,22 +54,15 @@ class GameState {
         this.role = role;
         this.state = state;
         this.paddle1 = new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50));
-        this.paddle2 = new GameObject(new Vector(constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
+        this.paddle2 = new GameObject(new Vector(Constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
         this.ball = new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10));
         this.score = { a: 0, b: 0 };
         this.simulateBall = true;
     }
 }
 
-let constants = {
-    dimensions: new Vector(500.0, 360.0),
-    ballSpeed: 50,
-    maxReflect: Math.PI / 3.0,
-    digitContext: BlockDigit.createContext(40, 80, 10)
-}
-
-function updateGameState(gameState, inputPosition, dt) {
-    const dimensions = constants.dimensions;
+function updateGameState(gameState, inputPosition, dt, gameEvents) {
+    const dimensions = Constants.dimensions;
     const canvas = $("#canvas").get(0);
     const topOffset = canvas.offsetTop;
 
@@ -93,12 +95,18 @@ function updateGameState(gameState, inputPosition, dt) {
         if (ball.velocity.x > 0.0 && ball.position.x >= dimensions.x - ball.size.x) {
             ball.velocity.x *= -1.0;
             gameState.score.a += 1;
+            if (gameState.score.a >= Constants.winScore) {
+                gameEvents.gameComplete(gameState);
+            }
             gameState.simulateBall = false;
             setTimeout(function() { restoreBallState(gameState, false); }, 3000);
         }
         else if (ball.velocity.x < 0.0 && ball.position.x <= 0.0) {
             ball.velocity.x *= -1.0;
             gameState.score.b += 1;
+            if (gameState.score.b >= Constants.winScore) {
+                gameEvents.gameComplete(gameState);
+            }
             gameState.simulateBall = false;
             setTimeout(function() { restoreBallState(gameState, true); }, 3000);
         }
@@ -111,8 +119,8 @@ function updateGameState(gameState, inputPosition, dt) {
 }
 
 function reflect(paddle, ball, left) {
-    const maxReflect = constants.maxReflect;
-    const ballSpeed = constants.ballSpeed;
+    const maxReflect = Constants.maxReflect;
+    const ballSpeed = Constants.ballSpeed;
 
     const paddleY = paddle.position.y + paddle.size.y / 2.0;
     const ballY = ball.position.y + ball.size.y / 2.0;
@@ -130,8 +138,8 @@ function reflect(paddle, ball, left) {
 }
 
 function restoreBallState(gameState, left) {
-    const dimensions = constants.dimensions;
-    const ballSpeed = constants.ballSpeed;
+    const dimensions = Constants.dimensions;
+    const ballSpeed = Constants.ballSpeed;
 
     const vx = ballSpeed * Math.cos(Math.PI / 4.0);
     const vy = ballSpeed * Math.sin(Math.PI / 4.0);
@@ -211,7 +219,7 @@ function getUrlMatchId() {
 
 /** Draw the current game state */
 function drawGame(gameState) {
-    const dimensions = constants.dimensions;
+    const dimensions = Constants.dimensions;
     let context = $("#canvas").get(0).getContext("2d");
     drawBackground(context, dimensions);
 
@@ -224,8 +232,8 @@ function drawGame(gameState) {
 
     context.strokeStyle = "white";
     context.save();
-    BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, constants.digitContext);
-    BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, constants.digitContext);
+    BlockDigit.drawDigit(dimensions.x / 2.0 - 60.0, 10.0, gameState.score.a % 10, context, Constants.digitContext);
+    BlockDigit.drawDigit(dimensions.x / 2.0 + 20.0, 10.0, gameState.score.b % 10, context, Constants.digitContext);
     context.restore();
 }
 
@@ -268,7 +276,7 @@ function showHostOptions(inputContext) {
     $("#hostMessaging").hide();
 
     let indicatorState = startLoadingIndicator();
-    let match = runMatch(null);
+    let match = runMatch(null, inputContext);
     var errorFirst = false;
     match.midReceived = function(mid) {
         $("#loadingIndicator").css("opacity", 0.0);
@@ -309,7 +317,7 @@ function showJoinOptions(inputContext) {
             let indicatorState = startLoadingIndicator();
             var errorFirst = false;
 
-            let match = runMatch(value);
+            let match = runMatch(value, inputContext);
             match.matchStarted = function() {
                 $("#interface").hide();
                 stopLoadingIndicator(indicatorState);
@@ -373,7 +381,7 @@ function animateLoadingIndicator(shouldContinue) {
 }
 
 function drawConnecting() {
-    const dimensions = constants.dimensions;
+    const dimensions = Constants.dimensions;
     let context = $("#canvas").get(0).getContext("2d");
     drawBackground(context, dimensions);
 
@@ -396,9 +404,9 @@ function drawBackground(context, dimensions) {
 }
 
 /** The self-rescheduling  game loop for both host and client updates */
-function gameLoop(gameState, connection, inputPosition, time) {
+function gameLoop(gameState, connection, inputPosition, time, gameEvents) {
     if (gameState.role == Role.Host) {
-        updateGameState(gameState, inputPosition, 0.04);
+        updateGameState(gameState, inputPosition, 0.04, gameEvents);
         let message = packGameStateMessage(gameState);
         let messageData = JSON.stringify(message);
         connection.send(messageData);
@@ -439,12 +447,12 @@ function startup() {
     if (mid === null) {
         runMenu(inputContext);
     } else {
-        runMatch(mid);
+        runMatch(mid, inputContext);
     }
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
-function runMatch(mid) {
+function runMatch(mid, inputContext) {
     // Callbacks to the match UI.
     let matchCallbacks = {
         midReceived: function(mid) {},
@@ -485,7 +493,10 @@ function runMatch(mid) {
         else if (message.type === MessageType.MatchStart) {
             matchCallbacks.matchStarted();
             gameState.role = message.payload.role;
-            runGame(gameState, ws, gameCallbacks);
+            let game = runGame(gameState, ws, gameCallbacks);
+            game.gameComplete = function() {
+                showRematchOptions(inputContext);
+            }
         }
         else if (message.type === MessageType.InputTx) {
             // TODO :Use the input position for the second paddle
@@ -497,11 +508,34 @@ function runMatch(mid) {
     return matchCallbacks;
 }
 
+function showRematchOptions(inputContext) {
+    inputContext.reset();
+    $("#interface").show();
+    $("#hostJoin").show();
+
+    $("#loadingIndicator").hide();
+    $("#joinEntry").hide();
+    $("#hostEntry").hide();
+    $("#return").hide();
+    $("#hostAddress").hide();
+}
+
 /** Start up the game loop, read input */
 function runGame(gameState, connection, callbacks) {
     var gameActive = true;
     callbacks.connectionClosed = function() {
         gameActive = false;
+    };
+
+    let gameEvents = {
+        gameComplete: function(gameState) {}
+    };
+
+    let localGameEvents = {
+        gameComplete: function(gameState) {
+            gameEvents.gameComplete(gameState);
+            gameActive = false;
+        }
     }
 
     let canvas = $("canvas").get(0);
@@ -517,9 +551,10 @@ function runGame(gameState, connection, callbacks) {
 
     let runLoop = function(time) {
         if (gameActive) {
-            gameLoop(gameState, connection, inputPosition, time);
+            gameLoop(gameState, connection, inputPosition, time, localGameEvents);
             window.requestAnimationFrame(runLoop);
         }
     };
     window.requestAnimationFrame(runLoop);
+    return gameEvents;
 }

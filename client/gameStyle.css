@@ -1,6 +1,6 @@
 .button, .textEntry, .returnButton {
   color: white;
-  background-color:#00000000;
+  background-color: rgba(0,0,0,0.0);
   font:32pt Andale Mono;
   border:0;
   text-decoration: underline;
