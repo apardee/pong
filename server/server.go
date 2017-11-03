@@ -46,23 +46,31 @@ func runMatch(m *match) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 
-	chanReader := func(conn *websocket.Conn, out chan<- []byte, dump bool) {
+	chanReader := func(conn *websocket.Conn, out chan<- []byte) {
 		finished := false
 		for !finished {
 			select {
 			case <-ctx.Done():
 				finished = true
-				cancel()
-				break
 			default:
 				_, byt, err := conn.ReadMessage()
 				if err != nil {
-					cancel()
+					finished = true
 				} else {
-					out <- byt
+					// Relay the bytes read along as unless the operation has already been cancelled
+					select {
+					case <-ctx.Done():
+						break
+					default:
+						out <- byt
+					}
 				}
 			}
 		}
+
+		close(out)
+		conn.Close()
+		cancel()
 	}
 
 	defer m.hostConn.Close()
@@ -76,7 +84,7 @@ func runMatch(m *match) {
 
 	// For now, the host waits for the client.
 	hostRead := make(chan []byte)
-	go chanReader(m.hostConn, hostRead, false)
+	go chanReader(m.hostConn, hostRead)
 	for client == nil {
 		select {
 		case <-ctx.Done():
@@ -103,7 +111,7 @@ func runMatch(m *match) {
 	}
 
 	clientRead := make(chan []byte)
-	go chanReader(client, clientRead, true)
+	go chanReader(client, clientRead)
 
 	// Once started, just relay messages between the two.
 	finished := false
@@ -122,6 +130,7 @@ func runMatch(m *match) {
 			}
 		}
 	}
+
 	log.Println("Match complete...")
 }
 

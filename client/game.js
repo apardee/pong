@@ -40,13 +40,6 @@ class GameObject {
     }
 }
 
-let constants = {
-    dimensions: new Vector(500.0, 360.0),
-    ballSpeed: 50,
-    maxReflect: Math.PI / 3.0,
-    digitContext: BlockDigit.createContext(40, 80, 10)
-}
-
 class GameState {
     constructor(role, state) {
         this.role = role;
@@ -57,6 +50,13 @@ class GameState {
         this.score = { a: 0, b: 0 };
         this.simulateBall = true;
     }
+}
+
+let constants = {
+    dimensions: new Vector(500.0, 360.0),
+    ballSpeed: 50,
+    maxReflect: Math.PI / 3.0,
+    digitContext: BlockDigit.createContext(40, 80, 10)
 }
 
 function updateGameState(gameState, inputPosition, dt) {
@@ -179,6 +179,16 @@ function unpackGameStateMessage(packed, state) {
     state.score = packed.score;
 }
 
+/** Message data for transmitting input position */
+function packInputMessage(inputPos) {
+    return {
+        type: MessageType.InputTx,
+        payload: {
+            inputPos: inputPos
+        }
+    }
+}
+
 /** Offset an input position to canvas coordinates */
 function offsetForCanvas(position, canvas) {
     const topOffset = canvas.offsetTop;
@@ -220,7 +230,7 @@ function drawGame(gameState) {
 }
 
 /** Start the menu flow */
-function runMenu(inputContext) {
+function runMenu(inputContext, message) {
     inputContext.reset();
     $("#interface").show();
     $("#hostJoin").show();
@@ -230,6 +240,10 @@ function runMenu(inputContext) {
     $("#hostEntry").hide();
     $("#return").hide();
     $("#hostAddress").hide();
+
+    if (message != null) {
+        alert(message);
+    }
 
     inputContext.returnPressed = function() {
         runMenu(inputContext);
@@ -243,6 +257,7 @@ function runMenu(inputContext) {
 
         let indicatorState = startLoadingIndicator();
         let match = runMatch(null);
+        var errorFirst = false;
         match.midReceived = function(mid) {
             $("#loadingIndicator").css("opacity", 0.0);
             $("#hostAddress").text(mid);
@@ -259,9 +274,13 @@ function runMenu(inputContext) {
             $("#hostMessaging").show();
             $("#return").show();
             stopLoadingIndicator(indicatorState);
+            errorFirst = true;
         }
 
         match.connectionClosed = function() {
+            if (errorFirst == false) {
+                runMenu(inputContext, "Connection lost!");
+            }
         }
     };
 
@@ -270,12 +289,13 @@ function runMenu(inputContext) {
         $("#joinEntry").show();
         $("#joinMessaging").hide();
 
-        $("#matchInput").css("opacity", 1.0);
+        $("#matchInput").show();
         $("#matchInput").get(0).focus();
         inputContext.matchInputChanged = function() {
             let value = $("#matchInput").val();
             if (value.length == 4) {
                 let indicatorState = startLoadingIndicator();
+                var errorFirst = false;
 
                 let match = runMatch(value);
                 match.matchStarted = function() {
@@ -288,9 +308,13 @@ function runMenu(inputContext) {
                     $("#joinMessaging").show();
                     $("#return").show();
                     stopLoadingIndicator(indicatorState);
+                    errorFirst = true;
                 }
         
                 match.connectionClosed = function() {
+                    if (errorFirst == false) {
+                        runMenu(inputContext, "Connection lost!");
+                    }
                 }
             } else {
                 $("#joinMessaging").text("");
@@ -369,7 +393,9 @@ function gameLoop(gameState, connection, inputPosition, time) {
         connection.send(messageData);
     }
     else {
-        // transmit mouse position
+        let message = packInputMessage(inputPosition);
+        let messageData = JSON.stringify(message);
+        connection.send(messageData);
     }
     drawGame(gameState);
 
@@ -449,7 +475,7 @@ function runMatch(mid) {
             runGame(gameState, ws);
         }
         else if (message.type === MessageType.InputTx) {
-            log("got an input message...");
+            // TODO :Use the input position for the second paddle
         }
         else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
