@@ -241,13 +241,8 @@ function drawGame(gameState) {
 function runMenu(inputContext, message) {
     inputContext.reset();
     $("#interface").show();
+    hideAllElements();
     $("#hostJoin").show();
-
-    $("#loadingIndicator").hide();
-    $("#joinEntry").hide();
-    $("#hostEntry").hide();
-    $("#return").hide();
-    $("#hostAddress").hide();
 
     if (message != null) {
         $("#hostJoinError").show();
@@ -508,16 +503,23 @@ function runMatch(mid, inputContext) {
     return matchCallbacks;
 }
 
-function showRematchOptions(inputContext) {
-    inputContext.reset();
-    $("#interface").show();
-    $("#hostJoin").show();
-
+function hideAllElements() {
+    $("#hostJoin").hide();
     $("#loadingIndicator").hide();
     $("#joinEntry").hide();
     $("#hostEntry").hide();
     $("#return").hide();
     $("#hostAddress").hide();
+    $("#rematch").hide();
+}
+
+function showRematchOptions(inputContext) {
+    inputContext.reset();
+    $("#interface").show();
+    hideAllElements();
+    $("#rematch").show();
+
+
 }
 
 /** Start up the game loop, read input */
