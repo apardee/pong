@@ -398,10 +398,6 @@ function gameLoop(gameState, connection, inputPosition, time) {
         connection.send(messageData);
     }
     drawGame(gameState);
-
-    window.requestAnimationFrame(function(time) {
-        gameLoop(gameState, connection, inputPosition, time);
-    });
 }
 
 function setupInputContext() {
@@ -497,7 +493,10 @@ function runGame(gameState, connection) {
         inputPosition.x = canvasPos.x;
         inputPosition.y = canvasPos.y;
     };
-    window.requestAnimationFrame(function(time) {
+
+    let runLoop = function(time) {
         gameLoop(gameState, connection, inputPosition, time);
-    });
+        window.requestAnimationFrame(runLoop);
+    };
+    window.requestAnimationFrame(runLoop);
 }
