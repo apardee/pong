@@ -289,10 +289,11 @@ function showJoinOptions(inputContext) {
     }
 }
 
-function hostMatch(inputContext) {
+function hostMatch(inputContext, connection) {
     let indicatorState = startLoadingIndicator();
-    let match = runMatch(null, inputContext);
     var errorFirst = false;
+
+    let match = runMatch(null, inputContext, connection);
     match.midReceived = function(mid) {
         $("#loadingIndicator").css("opacity", 0.0);
         $("#hostAddress").text(mid);
@@ -304,8 +305,8 @@ function hostMatch(inputContext) {
         $("#interface").hide();
     }
 
-    match.matchEnded = function() {
-        showRematchOptions(inputContext);
+    match.matchEnded = function(context) {
+        showRematchOptions(inputContext, context);
     }
 
     match.connectionError = function() {
@@ -323,18 +324,18 @@ function hostMatch(inputContext) {
     }
 }
 
-function joinMatch(mid, inputContext) {
+function joinMatch(mid, inputContext, connection) {
     let indicatorState = startLoadingIndicator();
     var errorFirst = false;
 
-    let match = runMatch(mid, inputContext);
+    let match = runMatch(mid, inputContext, connection);
     match.matchStarted = function() {
         $("#interface").hide();
         stopLoadingIndicator(indicatorState);
     }
 
-    match.matchEnded = function() {
-        showRematchOptions(inputContext);
+    match.matchEnded = function(context) {
+        showRematchOptions(inputContext, context);
     }
 
     match.connectionError = function() {
@@ -467,7 +468,7 @@ function runMatch(mid, inputContext, ws) {
     let matchCallbacks = {
         midReceived: function(mid) {},
         matchStarted: function() {},
-        matchEnded: function(ws) {},
+        matchEnded: function(context) {},
         connectionError: function() {},
         connectionClosed: function() {}
     };
@@ -477,6 +478,7 @@ function runMatch(mid, inputContext, ws) {
         connectionClosed: function() {}
     };
 
+    let readyForStart = ws != null;
     if (ws == null) {
         let gameUrl = "ws://localhost:8080";
         if (mid != null) {
@@ -486,6 +488,20 @@ function runMatch(mid, inputContext, ws) {
     }
 
     let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
+    gameState.role = (mid == null) ? Role.Host : Role.Client;
+
+    let startMatch = function() {
+        matchCallbacks.matchStarted();
+        let game = runGame(gameState, ws, gameCallbacks);
+        game.gameComplete = function() {
+            matchCallbacks.matchEnded({connection: ws, role: gameState.role});
+            let messageData = JSON.stringify({
+                type: MessageType.MatchComplete
+            });
+            ws.send(messageData);
+        }
+    }
+
     ws.onerror = function(event) {
         matchCallbacks.connectionError();
         gameCallbacks.connectionClosed();
@@ -503,16 +519,8 @@ function runMatch(mid, inputContext, ws) {
             matchCallbacks.midReceived(message.payload.mid);
         }
         else if (message.type === MessageType.MatchStart) {
-            matchCallbacks.matchStarted();
             gameState.role = message.payload.role;
-            let game = runGame(gameState, ws, gameCallbacks);
-            game.gameComplete = function() {
-                matchCallbacks.matchEnded(ws);
-                let messageData = JSON.stringify({
-                    type: MessageType.MatchComplete
-                });
-                ws.send(messageData);
-            }
+            startMatch();
         }
         else if (message.type === MessageType.InputTx) {
             // TODO :Use the input position for the second paddle
@@ -521,9 +529,14 @@ function runMatch(mid, inputContext, ws) {
             unpackGameStateMessage(message.payload, gameState);
         }
         else if (message.type == MessageType.MatchComplete) {
-            matchCallbacks.matchEnded(ws);
+            matchCallbacks.matchEnded({connection: ws, role: gameState.role});
         }
     }
+
+    if (readyForStart) {
+        startMatch();
+    }
+
     return matchCallbacks;
 }
 
@@ -537,13 +550,21 @@ function hideAllElements() {
     $("#rematch").hide();
 }
 
-function showRematchOptions(inputContext) {
+function showRematchOptions(inputContext, context) {
     inputContext.reset();
     $("#interface").show();
     hideAllElements();
     $("#rematch").show();
-
-
+    
+    window.setTimeout(function() {
+        if (context.role === Role.Host) {
+            hostMatch(inputContext, context.connection);
+        }
+        else {
+            joinMatch("existing", inputContext, context.connection);
+        }
+        $("#interface").hide();
+    }, 3000)
 }
 
 /** Start up the game loop, read input */
