@@ -305,7 +305,7 @@ function hostMatch(inputContext) {
     }
 
     match.matchEnded = function() {
-        alert("match ended 1");
+        showRematchOptions(inputContext);
     }
 
     match.connectionError = function() {
@@ -334,7 +334,7 @@ function joinMatch(mid, inputContext) {
     }
 
     match.matchEnded = function() {
-        alert("match ended 2");
+        showRematchOptions(inputContext);
     }
 
     match.connectionError = function() {
@@ -508,6 +508,10 @@ function runMatch(mid, inputContext, ws) {
             let game = runGame(gameState, ws, gameCallbacks);
             game.gameComplete = function() {
                 matchCallbacks.matchEnded(ws);
+                let messageData = JSON.stringify({
+                    type: MessageType.MatchComplete
+                });
+                ws.send(messageData);
             }
         }
         else if (message.type === MessageType.InputTx) {
@@ -515,6 +519,9 @@ function runMatch(mid, inputContext, ws) {
         }
         else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
+        }
+        else if (message.type == MessageType.MatchComplete) {
+            matchCallbacks.matchEnded(ws);
         }
     }
     return matchCallbacks;
