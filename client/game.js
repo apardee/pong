@@ -269,7 +269,27 @@ function showHostOptions(inputContext) {
     $("#hostJoin").hide();
     $("#hostEntry").show();
     $("#hostMessaging").hide();
+    hostMatch(inputContext);
+}
 
+function showJoinOptions(inputContext) {
+    $("#hostJoin").hide();
+    $("#joinEntry").show();
+    $("#joinMessaging").hide();
+
+    $("#matchInput").show();
+    $("#matchInput").get(0).focus();
+    inputContext.matchInputChanged = function() {
+        let mid = $("#matchInput").val();
+        if (mid.length == 4) {
+            joinMatch(mid, inputContext);
+        } else {
+            $("#joinMessaging").text("");
+        }
+    }
+}
+
+function hostMatch(inputContext) {
     let indicatorState = startLoadingIndicator();
     let match = runMatch(null, inputContext);
     var errorFirst = false;
@@ -282,6 +302,10 @@ function showHostOptions(inputContext) {
 
     match.matchStarted = function() {
         $("#interface").hide();
+    }
+
+    match.matchEnded = function() {
+        alert("match ended 1");
     }
 
     match.connectionError = function() {
@@ -299,40 +323,31 @@ function showHostOptions(inputContext) {
     }
 }
 
-function showJoinOptions(inputContext) {
-    $("#hostJoin").hide();
-    $("#joinEntry").show();
-    $("#joinMessaging").hide();
+function joinMatch(mid, inputContext) {
+    let indicatorState = startLoadingIndicator();
+    var errorFirst = false;
 
-    $("#matchInput").show();
-    $("#matchInput").get(0).focus();
-    inputContext.matchInputChanged = function() {
-        let value = $("#matchInput").val();
-        if (value.length == 4) {
-            let indicatorState = startLoadingIndicator();
-            var errorFirst = false;
+    let match = runMatch(mid, inputContext);
+    match.matchStarted = function() {
+        $("#interface").hide();
+        stopLoadingIndicator(indicatorState);
+    }
 
-            let match = runMatch(value, inputContext);
-            match.matchStarted = function() {
-                $("#interface").hide();
-                stopLoadingIndicator(indicatorState);
-            }
+    match.matchEnded = function() {
+        alert("match ended 2");
+    }
 
-            match.connectionError = function() {
-                $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
-                $("#joinMessaging").show();
-                $("#return").show();
-                stopLoadingIndicator(indicatorState);
-                errorFirst = true;
-            }
-    
-            match.connectionClosed = function() {
-                if (errorFirst == false) {
-                    runMenu(inputContext, "Connection lost!");
-                }
-            }
-        } else {
-            $("#joinMessaging").text("");
+    match.connectionError = function() {
+        $("#joinMessaging").text("Couldn't join a match with that match code. Verify that the host's match is ready and try again.");
+        $("#joinMessaging").show();
+        $("#return").show();
+        stopLoadingIndicator(indicatorState);
+        errorFirst = true;
+    }
+
+    match.connectionClosed = function() {
+        if (errorFirst == false) {
+            runMenu(inputContext, "Connection lost!");
         }
     }
 }
@@ -442,17 +457,17 @@ function startup() {
     if (mid === null) {
         runMenu(inputContext);
     } else {
-        runMatch(mid, inputContext);
+        joinMatch(mid, inputContext);
     }
 }
 
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
-function runMatch(mid, inputContext) {
+function runMatch(mid, inputContext, ws) {
     // Callbacks to the match UI.
     let matchCallbacks = {
         midReceived: function(mid) {},
         matchStarted: function() {},
-        matchEnded: function() {},
+        matchEnded: function(ws) {},
         connectionError: function() {},
         connectionClosed: function() {}
     };
@@ -462,13 +477,15 @@ function runMatch(mid, inputContext) {
         connectionClosed: function() {}
     };
 
-    let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
-    let gameUrl = "ws://localhost:8080";
-    if (mid != null) {
-        gameUrl = gameUrl + "?" + midAttr + "=" + mid;
+    if (ws == null) {
+        let gameUrl = "ws://localhost:8080";
+        if (mid != null) {
+            gameUrl = gameUrl + "?" + midAttr + "=" + mid;
+        }
+        ws = new WebSocket(gameUrl);
     }
-    
-    let ws = new WebSocket(gameUrl);
+
+    let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
     ws.onerror = function(event) {
         matchCallbacks.connectionError();
         gameCallbacks.connectionClosed();
@@ -490,7 +507,7 @@ function runMatch(mid, inputContext) {
             gameState.role = message.payload.role;
             let game = runGame(gameState, ws, gameCallbacks);
             game.gameComplete = function() {
-                showRematchOptions(inputContext);
+                matchCallbacks.matchEnded(ws);
             }
         }
         else if (message.type === MessageType.InputTx) {
