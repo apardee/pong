@@ -10,6 +10,7 @@ const MessageType = {
     MatchComplete: "MatchComplete",
     InputTx: "InputTx",
     GameStateTx: "GameStateTx",
+    RematchReady: "RematchReady",
 };
 
 const State = {
@@ -437,12 +438,14 @@ function setupInputContext() {
             inputContext.joinPressed =  function() {};
             inputContext.hostPressed =  function() {};
             inputContext.matchInputChanged =  function() {};
+            inputContext.rematchReadyPressed = function() {};
         }
     }
     inputContext.reset();
     $("#returnButton").click(function() { inputContext.returnPressed(); });
     $("#joinButton").click(function() { inputContext.joinPressed(); });
     $("#hostButton").click(function() { inputContext.hostPressed(); });
+    $("#rematchReadyButton").click(function() { inputContext.rematchReadyPressed(); });
     $("#matchInput").keyup(function() { inputContext.matchInputChanged(); });
     return inputContext;
 }
@@ -555,16 +558,68 @@ function showRematchOptions(inputContext, context) {
     $("#interface").show();
     hideAllElements();
     $("#rematch").show();
-    
-    window.setTimeout(function() {
-        if (context.role === Role.Host) {
+
+    var ready = false;
+    var opponentReady = false;
+
+    let evaluateStart = function() {
+        if (context.role === Role.Host && ready && opponentReady) {
+            // Start the match off.
             hostMatch(inputContext, context.connection);
+            let startMessage = {
+                type: MessageType.MatchStart,
+                payload: {
+                    role: "Client"
+                }
+            }
+            let messageData = JSON.stringify(startMessage);
+            context.connection.send(messageData);
+            $("#interface").hide();
         }
-        else {
+    };
+
+    inputContext.rematchReadyPressed = function() {
+        ready = !ready;
+        let readyMessage = {
+            type: MessageType.RematchReady,
+            ready: ready
+        };
+        let messageData = JSON.stringify(readyMessage);
+        context.connection.send(messageData);
+        evaluateStart();
+    };
+
+    let notReadyMessage = "Opponent Not Yet Ready";
+    let readyMessage = "Opponent Ready";
+    $("#rematchOpponentReady").text(notReadyMessage);
+    context.connection.onmessage = function(event) {
+        let message = JSON.parse(event.data);
+        if (message.type === MessageType.RematchReady) {
+            if (message.ready) {
+                opponentReady = true;
+                $("#rematchOpponentReady").text(readyMessage);
+            } else {
+                opponentReady = false;
+                $("#rematchOpponentReady").text(notReadyMessage);
+            }
+            evaluateStart();
+        }
+        else if (message.type === MessageType.MatchStart) {
+            // If the client receives the match start, kick off the new match.
             joinMatch("existing", inputContext, context.connection);
+            $("#interface").hide();
         }
-        $("#interface").hide();
-    }, 3000)
+    };
+
+    // window.setTimeout(function() {
+    //     if (context.role === Role.Host) {
+    //         hostMatch(inputContext, context.connection);
+    //     }
+    //     else {
+    //         joinMatch("existing", inputContext, context.connection);
+    //     }
+    //     $("#interface").hide();
+    // }, 3000);
 }
 
 /** Start up the game loop, read input */
