@@ -1,3 +1,5 @@
+"use strict";
+
 let BlockDigit = (function() {
     var exports = {}
 
@@ -5,13 +7,20 @@ let BlockDigit = (function() {
         let buffer = lineWidth / 2.0;
         return {
             segments: [
-                [0, buffer, width, buffer], // Top 0
-                [0, height / 2.0 - buffer / 2.0, width, height / 2.0 - buffer / 2.0], // Mid 1
-                [0, height - lineWidth, width, height - lineWidth], // Bottom 2
-                [buffer, 0, buffer, height / 2.0 - buffer / 2.0], // Left-Top 3
-                [ buffer, height / 2.0 - buffer / 2.0, buffer, height - buffer ], // Left-Bottom 4
-                [ width - buffer, 0, width - buffer, height / 2.0 - buffer / 2.0 ], // Right-Top 5
-                [ width - buffer, height / 2.0 - buffer / 2.0, width - buffer, height - buffer ] // Right-Bottom 6
+                // Top 0
+                [0, buffer, width, buffer],
+                // Mid 1
+                [0, height / 2.0 - buffer / 2.0, width, height / 2.0 - buffer / 2.0],
+                // Bottom 2
+                [0, height - lineWidth, width, height - lineWidth],
+                // Left-Top 3
+                [buffer, 0, buffer, height / 2.0 - buffer / 2.0],
+                // Left-Bottom 4
+                [buffer, height / 2.0 - buffer / 2.0, buffer, height - buffer],
+                // Right-Top 5
+                [width - buffer, 0, width - buffer, height / 2.0 - buffer / 2.0],
+                // Right-Bottom 6
+                [width - buffer, height / 2.0 - buffer / 2.0, width - buffer, height - buffer]
             ],
             lineWidth: lineWidth
         }
@@ -35,6 +44,7 @@ let BlockDigit = (function() {
             case 7: indexes = [0, 5, 6]; break;
             case 8: indexes = [0, 1, 2, 3, 4, 5, 6]; break;
             case 9: indexes = [0, 1, 2, 3, 5, 6]; break;
+            default: break;
         }
 
         let drawSegments = segments.segments;
@@ -47,20 +57,4 @@ let BlockDigit = (function() {
     }
 
     return exports;
-})()
-
-function runLoop() {
-    const canvas = document.getElementById("canvas");
-    const context = canvas.getContext("2d");
-    context.fillStyle = "#333333";
-    context.fillRect(0, 0, 200, 200);
-
-    let width = 50;
-    let height = 100;
-    let lineWidth = 10;
-
-    let segments = BlockDigit.createContext(width, height, lineWidth);
-    BlockDigit.drawDigit(20, 20, 7, context, segments);
-
-    window.requestAnimationFrame(runLoop);
-}
+}());

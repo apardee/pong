@@ -1,3 +1,5 @@
+"use strict";
+
 function log(message) {
     let element = document.getElementById("output");
     element.innerText += message;
@@ -64,8 +66,6 @@ class GameState {
 
 function updateGameState(gameState, inputPosition, dt, gameEvents) {
     const dimensions = Constants.dimensions;
-    const canvas = $("#canvas").get(0);
-    const topOffset = canvas.offsetTop;
 
     // Update the paddle.
     var newPos = inputPosition.y - gameState.paddle1.size.y / 2.0;
@@ -207,7 +207,7 @@ function offsetForCanvas(position, canvas) {
 
 /** Read 'mid' off of the active url */
 function getUrlMatchId() {
-    let params = window.location.search.substring(1).split(new RegExp("=|\&"));
+    let params = window.location.search.substring(1).split(new RegExp("=|\\&"));
     var mid = null;
     for (var i = 0; i < params.length - 1; i++) {
         if (params[i] === midAttr) {
@@ -392,14 +392,6 @@ function animateLoadingIndicator(shouldContinue) {
     }, interval);
 }
 
-function drawConnecting() {
-    const dimensions = Constants.dimensions;
-    let context = $("#canvas").get(0).getContext("2d");
-    drawBackground(context, dimensions);
-
-    context.fillText("loading...", 0, 0);
-}
-
 function drawBackground(context, dimensions) {
     context.fillStyle = "black";
     context.fillRect(0, 0, dimensions.x, dimensions.y);
@@ -469,9 +461,9 @@ function startup() {
 function runMatch(mid, inputContext, ws) {
     // Callbacks to the match UI.
     let matchCallbacks = {
-        midReceived: function(mid) {},
+        midReceived: function() {},
         matchStarted: function() {},
-        matchEnded: function(context) {},
+        matchEnded: function() {},
         connectionError: function() {},
         connectionClosed: function() {}
     };
@@ -505,13 +497,13 @@ function runMatch(mid, inputContext, ws) {
         }
     }
 
-    ws.onerror = function(event) {
+    ws.onerror = function() {
         matchCallbacks.connectionError();
         gameCallbacks.connectionClosed();
     }
-    ws.onopen = function(event) {
+    ws.onopen = function() {
     }
-    ws.onclose = function(event) {
+    ws.onclose = function() {
         matchCallbacks.connectionClosed();
         gameCallbacks.connectionClosed();
     }
@@ -610,16 +602,6 @@ function showRematchOptions(inputContext, context) {
             $("#interface").hide();
         }
     };
-
-    // window.setTimeout(function() {
-    //     if (context.role === Role.Host) {
-    //         hostMatch(inputContext, context.connection);
-    //     }
-    //     else {
-    //         joinMatch("existing", inputContext, context.connection);
-    //     }
-    //     $("#interface").hide();
-    // }, 3000);
 }
 
 /** Start up the game loop, read input */
@@ -630,7 +612,7 @@ function runGame(gameState, connection, callbacks) {
     };
 
     let gameEvents = {
-        gameComplete: function(gameState) {}
+        gameComplete: function() {}
     };
 
     let localGameEvents = {
