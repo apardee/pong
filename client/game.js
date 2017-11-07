@@ -63,11 +63,22 @@ function GameState(role, state) {
     };
 }
 
-function updateGameState(gameState, inputPosition, dt, gameEvents) {
+function updateGameState(gameState, inputs, dt, gameEvents) {
     var dimensions = Constants.dimensions;
 
+    var inputA = null;
+    var inputB = null;
+    if (gameState.role === Role.Host) {
+        inputA = inputs.local;
+        inputB = inputs.remote;
+    }
+    else {
+        inputA = inputs.remote;
+        inputB = inputs.local;
+    }
+
     // Update the paddle.
-    var newPos = inputPosition.y - gameState.paddle1.size.y / 2.0;
+    var newPos = inputA.y - gameState.paddle1.size.y / 2.0;
     if (newPos <= 2.0) {
         newPos = 2.0;
     }
@@ -75,6 +86,15 @@ function updateGameState(gameState, inputPosition, dt, gameEvents) {
         newPos = dimensions.y - gameState.paddle1.size.y - 2.0;
     }
     gameState.paddle1.position.y = newPos;
+
+
+    newPos = inputB.y - gameState.paddle2.size.y / 2.0;
+    if (newPos <= 2.0) {
+        newPos = 2.0;
+    }
+    else if (newPos > dimensions.y - gameState.paddle2.size.y - 2.0) {
+        newPos = dimensions.y - gameState.paddle2.size.y - 2.0;
+    }
     gameState.paddle2.position.y = newPos;
 
     // Update the ball.
@@ -191,9 +211,7 @@ function unpackGameStateMessage(packed, state) {
 function packInputMessage(inputPos) {
     return {
         type: MessageType.InputTx,
-        payload: {
-            inputPos: inputPos
-        }
+        payload: inputPos
     }
 }
 
@@ -407,17 +425,17 @@ function drawBackground(context, dimensions) {
 }
 
 /** The self-rescheduling  game loop for both host and client updates */
-function gameLoop(gameState, connection, inputPosition, time, gameEvents) {
+function gameLoop(gameState, connection, inputs, time, gameEvents) {
     var message = null;
     var messageData = null;
     if (gameState.role == Role.Host) {
-        updateGameState(gameState, inputPosition, 0.04, gameEvents);
+        updateGameState(gameState, inputs, 0.04, gameEvents);
         message = packGameStateMessage(gameState);
         messageData = JSON.stringify(message);
         connection.send(messageData);
     }
     else {
-        message = packInputMessage(inputPosition);
+        message = packInputMessage(inputs.local);
         messageData = JSON.stringify(message);
         connection.send(messageData);
     }
@@ -471,7 +489,8 @@ function runMatch(mid, inputContext, ws) {
 
     // Callbacks to the running game.
     var gameCallbacks = {
-        connectionClosed: function() {}
+        connectionClosed: function() {},
+        remoteInputUpdated: function() {}
     };
 
     var readyForStart = ws != null;
@@ -519,7 +538,7 @@ function runMatch(mid, inputContext, ws) {
             startMatch();
         }
         else if (message.type === MessageType.InputTx) {
-            // TODO :Use the input position for the second paddle
+            gameCallbacks.remoteInputUpdated(message.payload);
         }
         else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
@@ -575,7 +594,9 @@ function showRematchOptions(inputContext, context) {
         ready = !ready;
         var readyMessage = {
             type: MessageType.RematchReady,
-            ready: ready
+            payload: {
+                ready: ready
+            }
         };
         var messageData = JSON.stringify(readyMessage);
         context.connection.send(messageData);
@@ -588,7 +609,7 @@ function showRematchOptions(inputContext, context) {
     context.connection.onmessage = function(event) {
         var message = JSON.parse(event.data);
         if (message.type === MessageType.RematchReady) {
-            if (message.ready) {
+            if (message.payload.ready) {
                 opponentReady = true;
                 $("#rematchOpponentReady").text(readyMessage);
             } else {
@@ -612,6 +633,15 @@ function runGame(gameState, connection, callbacks) {
         gameActive = false;
     };
 
+    var inputs = {
+        remote: Vector(0, 0),
+        local: Vector(0, 0)
+    };
+
+    callbacks.remoteInputUpdated = function(input) {
+        inputs.remote = input;
+    };
+
     var gameEvents = {
         gameComplete: function() {}
     };
@@ -621,22 +651,19 @@ function runGame(gameState, connection, callbacks) {
             gameEvents.gameComplete(gameState);
             gameActive = false;
         }
-    }
+    };
 
     var canvas = $("canvas").get(0);
 
     restoreBallState(gameState, true);
-    var inputPosition = Vector(0, 0);
     document.onmousemove = function(event) {
         var pagePos = Vector(event.pageX, event.pageY);
-        var canvasPos = offsetForCanvas(pagePos, canvas);
-        inputPosition.x = canvasPos.x;
-        inputPosition.y = canvasPos.y;
+        inputs.local = offsetForCanvas(pagePos, canvas);
     };
 
     var runLoop = function(time) {
         if (gameActive) {
-            gameLoop(gameState, connection, inputPosition, time, localGameEvents);
+            gameLoop(gameState, connection, inputs, time, localGameEvents);
             window.requestAnimationFrame(runLoop);
         }
     };
