@@ -1,12 +1,12 @@
 "use strict";
 
 function log(message) {
-    let element = document.getElementById("output");
+    var element = document.getElementById("output");
     element.innerText += message;
     element.innerText += "\n";
 }
 
-const MessageType = {
+var MessageType = {
     MatchId: "MatchId",
     MatchStart: "MatchStart",
     MatchComplete: "MatchComplete",
@@ -15,57 +15,56 @@ const MessageType = {
     RematchReady: "RematchReady",
 };
 
-const State = {
+var State = {
     WaitingPlayer: 0,
     GameActive: 1,
     GameEnded: 2
 };
 
-const Role = {
+var Role = {
     Unassigned: "Unassigned",
     Host: "Host",
     Client: "Client"
 };
 
-let midAttr = "mid";
-
-class Vector {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-    }
+function Vector(x, y) {
+    return {
+        x: x,
+        y: y
+    };
 }
 
-let Constants = {
-    dimensions: new Vector(500.0, 360.0),
+var Constants = {
+    dimensions: Vector(500.0, 360.0),
     ballSpeed: 50,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
-    winScore: 1
+    winScore: 1,
+    midAttr: "mid"
 }
 
-class GameObject {
-    constructor(position, velocity, size) {
-        this.position = position ? position : Vector(0, 0);
-        this.velocity = velocity ? velocity : Vector(0, 0);
-        this.size = size ? size : Vector(0, 0);
-    }
+function GameObject(position, velocity, size) {
+    return {
+        position: position ? position : Vector(0, 0),
+        velocity: velocity ? velocity : Vector(0, 0),
+        size: size ? size : Vector(0, 0)
+    };
 }
 
-class GameState {
-    constructor(role, state) {
-        this.role = role;
-        this.state = state;
-        this.paddle1 = new GameObject(new Vector(10, 80), new Vector(0, 0), new Vector(10, 50));
-        this.paddle2 = new GameObject(new Vector(Constants.dimensions.x - 16, 130), new Vector(0, 0), new Vector(10, 50));
-        this.ball = new GameObject(new Vector(0, 0), new Vector(0.0, 0.0), new Vector(10, 10));
-        this.score = { a: 0, b: 0 };
-        this.simulateBall = true;
-    }
+function GameState(role, state) {
+    return {
+        role: role,
+        state: state,
+        paddle1: GameObject(Vector(10, 80), Vector(0, 0), Vector(10, 50)),
+        paddle2: GameObject(Vector(Constants.dimensions.x - 16, 130), Vector(0, 0), Vector(10, 50)),
+        ball: GameObject(Vector(0, 0), Vector(0.0, 0.0), Vector(10, 10)),
+        score: { a: 0, b: 0 },
+        simulateBall: true
+    };
 }
 
 function updateGameState(gameState, inputPosition, dt, gameEvents) {
-    const dimensions = Constants.dimensions;
+    var dimensions = Constants.dimensions;
 
     // Update the paddle.
     var newPos = inputPosition.y - gameState.paddle1.size.y / 2.0;
@@ -120,14 +119,14 @@ function updateGameState(gameState, inputPosition, dt, gameEvents) {
 }
 
 function reflect(paddle, ball, left) {
-    const maxReflect = Constants.maxReflect;
-    const ballSpeed = Constants.ballSpeed;
+    var maxReflect = Constants.maxReflect;
+    var ballSpeed = Constants.ballSpeed;
 
-    const paddleY = paddle.position.y + paddle.size.y / 2.0;
-    const ballY = ball.position.y + ball.size.y / 2.0;
-    const ratio = (paddleY - ballY) / (paddle.size.y / 2.0);
+    var paddleY = paddle.position.y + paddle.size.y / 2.0;
+    var ballY = ball.position.y + ball.size.y / 2.0;
+    var ratio = (paddleY - ballY) / (paddle.size.y / 2.0);
 
-    const reflectAngle = maxReflect * Math.abs(ratio);
+    var reflectAngle = maxReflect * Math.abs(ratio);
     ball.velocity.x = ballSpeed * Math.cos(reflectAngle);
     if (left) {
         ball.velocity.x *= -1.0;
@@ -139,13 +138,13 @@ function reflect(paddle, ball, left) {
 }
 
 function restoreBallState(gameState, left) {
-    const dimensions = Constants.dimensions;
-    const ballSpeed = Constants.ballSpeed;
+    var dimensions = Constants.dimensions;
+    var ballSpeed = Constants.ballSpeed;
 
-    const vx = ballSpeed * Math.cos(Math.PI / 4.0);
-    const vy = ballSpeed * Math.sin(Math.PI / 4.0);
-    gameState.ball.position = new Vector(dimensions.x / 2.0, dimensions.y * 0.3);
-    gameState.ball.velocity = new Vector(left ? -vx : vx, vy);
+    var vx = ballSpeed * Math.cos(Math.PI / 4.0);
+    var vy = ballSpeed * Math.sin(Math.PI / 4.0);
+    gameState.ball.position = Vector(dimensions.x / 2.0, dimensions.y * 0.3);
+    gameState.ball.velocity = Vector(left ? -vx : vx, vy);
     gameState.simulateBall = true;
 }
 
@@ -200,17 +199,17 @@ function packInputMessage(inputPos) {
 
 /** Offset an input position to canvas coordinates */
 function offsetForCanvas(position, canvas) {
-    const topOffset = canvas.offsetTop;
-    const leftOffset = canvas.offsetLeft;
-    return new Vector(position.x - leftOffset, position.y - topOffset);
+    var topOffset = canvas.offsetTop;
+    var leftOffset = canvas.offsetLeft;
+    return Vector(position.x - leftOffset, position.y - topOffset);
 }
 
 /** Read 'mid' off of the active url */
 function getUrlMatchId() {
-    let params = window.location.search.substring(1).split(new RegExp("=|\\&"));
+    var params = window.location.search.substring(1).split(new RegExp("=|\\&"));
     var mid = null;
     for (var i = 0; i < params.length - 1; i++) {
-        if (params[i] === midAttr) {
+        if (params[i] === Constants.midAttr) {
             mid = params[i + 1];
             break;
         }
@@ -220,8 +219,8 @@ function getUrlMatchId() {
 
 /** Draw the current game state */
 function drawGame(gameState) {
-    const dimensions = Constants.dimensions;
-    let context = $("#canvas").get(0).getContext("2d");
+    var dimensions = Constants.dimensions;
+    var context = $("#canvas").get(0).getContext("2d");
     drawBackground(context, dimensions);
 
     context.fillStyle = "white";
@@ -281,7 +280,7 @@ function showJoinOptions(inputContext) {
     $("#matchInput").show();
     $("#matchInput").get(0).focus();
     inputContext.matchInputChanged = function() {
-        let mid = $("#matchInput").val();
+        var mid = $("#matchInput").val();
         if (mid.length == 4) {
             joinMatch(mid, inputContext);
         } else {
@@ -291,10 +290,10 @@ function showJoinOptions(inputContext) {
 }
 
 function hostMatch(inputContext, connection) {
-    let indicatorState = startLoadingIndicator();
+    var indicatorState = startLoadingIndicator();
     var errorFirst = false;
 
-    let match = runMatch(null, inputContext, connection);
+    var match = runMatch(null, inputContext, connection);
     match.midReceived = function(mid) {
         $("#loadingIndicator").css("opacity", 0.0);
         $("#hostAddress").text(mid);
@@ -326,10 +325,10 @@ function hostMatch(inputContext, connection) {
 }
 
 function joinMatch(mid, inputContext, connection) {
-    let indicatorState = startLoadingIndicator();
+    var indicatorState = startLoadingIndicator();
     var errorFirst = false;
 
-    let match = runMatch(mid, inputContext, connection);
+    var match = runMatch(mid, inputContext, connection);
     match.matchStarted = function() {
         $("#interface").hide();
         stopLoadingIndicator(indicatorState);
@@ -372,9 +371,9 @@ function stopLoadingIndicator(state) {
 }
 
 function animateLoadingIndicator(shouldContinue) {
-    let element =  $("#loadingIndicator");
+    var element =  $("#loadingIndicator");
     element.show();
-    let interval = 400;
+    var interval = 400;
     element.text(" ");
     window.setTimeout(function() {
         element.text(".");
@@ -409,22 +408,24 @@ function drawBackground(context, dimensions) {
 
 /** The self-rescheduling  game loop for both host and client updates */
 function gameLoop(gameState, connection, inputPosition, time, gameEvents) {
+    var message = null;
+    var messageData = null;
     if (gameState.role == Role.Host) {
         updateGameState(gameState, inputPosition, 0.04, gameEvents);
-        let message = packGameStateMessage(gameState);
-        let messageData = JSON.stringify(message);
+        message = packGameStateMessage(gameState);
+        messageData = JSON.stringify(message);
         connection.send(messageData);
     }
     else {
-        let message = packInputMessage(inputPosition);
-        let messageData = JSON.stringify(message);
+        message = packInputMessage(inputPosition);
+        messageData = JSON.stringify(message);
         connection.send(messageData);
     }
     drawGame(gameState);
 }
 
 function setupInputContext() {
-    let inputContext = {
+    var inputContext = {
         reset: function() {
             inputContext.returnPressed = function() {};
             inputContext.joinPressed =  function() {};
@@ -444,12 +445,12 @@ function setupInputContext() {
 
 /** Entry point from document.onload */
 function startup() {
-    let inputContext = setupInputContext();
+    var inputContext = setupInputContext();
 
     $("#interface").hide();
     // Either start a hosted match, or provide the option to host or enter a match code.
     // Evaluate the url parameter here, it could have been provided to jumpstart the match.
-    let mid = getUrlMatchId()
+    var mid = getUrlMatchId()
     if (mid === null) {
         runMenu(inputContext);
     } else {
@@ -460,7 +461,7 @@ function startup() {
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
 function runMatch(mid, inputContext, ws) {
     // Callbacks to the match UI.
-    let matchCallbacks = {
+    var matchCallbacks = {
         midReceived: function() {},
         matchStarted: function() {},
         matchEnded: function() {},
@@ -469,28 +470,28 @@ function runMatch(mid, inputContext, ws) {
     };
 
     // Callbacks to the running game.
-    let gameCallbacks = {
+    var gameCallbacks = {
         connectionClosed: function() {}
     };
 
-    let readyForStart = ws != null;
+    var readyForStart = ws != null;
     if (ws == null) {
-        let gameUrl = "ws://localhost:8080";
+        var gameUrl = "ws://localhost:8080";
         if (mid != null) {
-            gameUrl = gameUrl + "?" + midAttr + "=" + mid;
+            gameUrl = gameUrl + "?" + Constants.midAttr + "=" + mid;
         }
         ws = new WebSocket(gameUrl);
     }
 
-    let gameState = new GameState(Role.Unassigned, State.WaitingPlayer);
+    var gameState = GameState(Role.Unassigned, State.WaitingPlayer);
     gameState.role = (mid == null) ? Role.Host : Role.Client;
 
-    let startMatch = function() {
+    var startMatch = function() {
         matchCallbacks.matchStarted();
-        let game = runGame(gameState, ws, gameCallbacks);
+        var game = runGame(gameState, ws, gameCallbacks);
         game.gameComplete = function() {
             matchCallbacks.matchEnded({connection: ws, role: gameState.role});
-            let messageData = JSON.stringify({
+            var messageData = JSON.stringify({
                 type: MessageType.MatchComplete
             });
             ws.send(messageData);
@@ -509,7 +510,7 @@ function runMatch(mid, inputContext, ws) {
     }
     ws.onmessage = function(event) {
         // log("rx: " + event.data);
-        let message = JSON.parse(event.data);
+        var message = JSON.parse(event.data);
         if (message.type === MessageType.MatchId) {
             matchCallbacks.midReceived(message.payload.mid);
         }
@@ -554,17 +555,17 @@ function showRematchOptions(inputContext, context) {
     var ready = false;
     var opponentReady = false;
 
-    let evaluateStart = function() {
+    var evaluateStart = function() {
         if (context.role === Role.Host && ready && opponentReady) {
             // Start the match off.
             hostMatch(inputContext, context.connection);
-            let startMessage = {
+            var startMessage = {
                 type: MessageType.MatchStart,
                 payload: {
                     role: "Client"
                 }
             }
-            let messageData = JSON.stringify(startMessage);
+            var messageData = JSON.stringify(startMessage);
             context.connection.send(messageData);
             $("#interface").hide();
         }
@@ -572,20 +573,20 @@ function showRematchOptions(inputContext, context) {
 
     inputContext.rematchReadyPressed = function() {
         ready = !ready;
-        let readyMessage = {
+        var readyMessage = {
             type: MessageType.RematchReady,
             ready: ready
         };
-        let messageData = JSON.stringify(readyMessage);
+        var messageData = JSON.stringify(readyMessage);
         context.connection.send(messageData);
         evaluateStart();
     };
 
-    let notReadyMessage = "Opponent Not Yet Ready";
-    let readyMessage = "Opponent Ready";
+    var notReadyMessage = "Opponent Not Yet Ready";
+    var readyMessage = "Opponent Ready";
     $("#rematchOpponentReady").text(notReadyMessage);
     context.connection.onmessage = function(event) {
-        let message = JSON.parse(event.data);
+        var message = JSON.parse(event.data);
         if (message.type === MessageType.RematchReady) {
             if (message.ready) {
                 opponentReady = true;
@@ -611,29 +612,29 @@ function runGame(gameState, connection, callbacks) {
         gameActive = false;
     };
 
-    let gameEvents = {
+    var gameEvents = {
         gameComplete: function() {}
     };
 
-    let localGameEvents = {
+    var localGameEvents = {
         gameComplete: function(gameState) {
             gameEvents.gameComplete(gameState);
             gameActive = false;
         }
     }
 
-    let canvas = $("canvas").get(0);
+    var canvas = $("canvas").get(0);
 
     restoreBallState(gameState, true);
-    var inputPosition = new Vector(0, 0);
+    var inputPosition = Vector(0, 0);
     document.onmousemove = function(event) {
-        let pagePos = new Vector(event.pageX, event.pageY);
-        let canvasPos = offsetForCanvas(pagePos, canvas);
+        var pagePos = Vector(event.pageX, event.pageY);
+        var canvasPos = offsetForCanvas(pagePos, canvas);
         inputPosition.x = canvasPos.x;
         inputPosition.y = canvasPos.y;
     };
 
-    let runLoop = function(time) {
+    var runLoop = function(time) {
         if (gameActive) {
             gameLoop(gameState, connection, inputPosition, time, localGameEvents);
             window.requestAnimationFrame(runLoop);

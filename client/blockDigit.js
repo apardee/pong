@@ -1,10 +1,10 @@
 "use strict";
 
-let BlockDigit = (function() {
+var BlockDigit = (function() {
     var exports = {}
 
     exports.createContext = function(width, height, lineWidth) {
-        let buffer = lineWidth / 2.0;
+        var buffer = lineWidth / 2.0;
         return {
             segments: [
                 // Top 0
@@ -47,9 +47,9 @@ let BlockDigit = (function() {
             default: break;
         }
 
-        let drawSegments = segments.segments;
+        var drawSegments = segments.segments;
         for (var i = 0; i < indexes.length; i++) {
-            let segment = drawSegments[indexes[i]];
+            var segment = drawSegments[indexes[i]];
             context.moveTo(segment[0] + x, segment[1] + y);
             context.lineTo(segment[2] + x, segment[3] + y);
         }
