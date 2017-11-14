@@ -211,6 +211,7 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mm = newMatchMaker()
 	go serveMatchRequests(mm)
-	http.HandleFunc("/", receiveConnection)
+	http.HandleFunc("/sock", receiveConnection)
+	http.Handle("/", http.FileServer(http.Dir("./client")))
 	http.ListenAndServe(":8080", nil)
 }

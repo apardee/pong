@@ -495,7 +495,7 @@ function runMatch(mid, inputContext, ws) {
 
     var readyForStart = ws != null;
     if (ws == null) {
-        var gameUrl = "ws://localhost:8080";
+        var gameUrl = "ws://127.0.0.1:8080/sock";
         if (mid != null) {
             gameUrl = gameUrl + "?" + Constants.midAttr + "=" + mid;
         }
