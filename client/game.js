@@ -39,7 +39,7 @@ var Constants = {
     ballSpeed: 50,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
-    winScore: 1,
+    winScore: 5,
     midAttr: "mid"
 }
 
@@ -425,11 +425,11 @@ function drawBackground(context, dimensions) {
 }
 
 /** The self-rescheduling  game loop for both host and client updates */
-function gameLoop(gameState, connection, inputs, time, gameEvents) {
+function gameLoop(gameState, connection, inputs, dt, gameEvents) {
     var message = null;
     var messageData = null;
     if (gameState.role == Role.Host) {
-        updateGameState(gameState, inputs, 0.04, gameEvents);
+        updateGameState(gameState, inputs, dt, gameEvents);
         message = packGameStateMessage(gameState);
         messageData = JSON.stringify(message);
         connection.send(messageData);
@@ -439,7 +439,6 @@ function gameLoop(gameState, connection, inputs, time, gameEvents) {
         messageData = JSON.stringify(message);
         connection.send(messageData);
     }
-    drawGame(gameState);
 }
 
 function setupInputContext() {
@@ -495,7 +494,7 @@ function runMatch(mid, inputContext, ws) {
 
     var readyForStart = ws != null;
     if (ws == null) {
-        var gameUrl = "ws://127.0.0.1:8080/sock";
+        var gameUrl = "ws://127.0.0.1:8080/sock"; // TODO: build the relative path off of window.location
         if (mid != null) {
             gameUrl = gameUrl + "?" + Constants.midAttr + "=" + mid;
         }
@@ -661,12 +660,24 @@ function runGame(gameState, connection, callbacks) {
         inputs.local = offsetForCanvas(pagePos, canvas);
     };
 
-    var runLoop = function(time) {
+    var gameInterval = 33.33;
+    var runLoop = function() {
         if (gameActive) {
-            gameLoop(gameState, connection, inputs, time, localGameEvents);
-            window.requestAnimationFrame(runLoop);
+            gameLoop(gameState, connection, inputs, gameInterval / 1000.0, localGameEvents);
         }
     };
-    window.requestAnimationFrame(runLoop);
+    var interval = window.setInterval(runLoop, gameInterval);
+
+    var renderLoop = function(time) {
+        if (gameActive) {
+            drawGame(gameState);
+            window.requestAnimationFrame(renderLoop);
+        }
+        else {
+            clearInterval(interval);
+        }
+    };
+    window.requestAnimationFrame(renderLoop);
+
     return gameEvents;
 }
