@@ -10,7 +10,6 @@ var MessageType = {
     MatchId: "MatchId",
     MatchStart: "MatchStart",
     MatchComplete: "MatchComplete",
-    InputTx: "InputTx",
     GameStateTx: "GameStateTx",
     RematchReady: "RematchReady",
 };
@@ -66,75 +65,69 @@ function GameState(role, state) {
 function updateGameState(gameState, inputs, dt, gameEvents) {
     var dimensions = Constants.dimensions;
 
-    var inputA = null;
-    var inputB = null;
     if (gameState.role === Role.Host) {
-        inputA = inputs.local;
-        inputB = inputs.remote;
+        // Update the paddle.
+        var newPos = inputs.local.y - gameState.paddle1.size.y / 2.0;
+        if (newPos <= 2.0) {
+            newPos = 2.0;
+        }
+        else if (newPos > dimensions.y - gameState.paddle1.size.y - 2.0) {
+            newPos = dimensions.y - gameState.paddle1.size.y - 2.0;
+        }
+        gameState.paddle1.position.y = newPos;
+
+        // Update the ball.
+        if (gameState.simulateBall) {
+            var ball = gameState.ball;
+            ball.position.x = ball.position.x + ball.velocity.x * dt;
+            ball.position.y = ball.position.y + ball.velocity.y * dt;
+
+            if (ball.velocity.x > 0.0 && collides(ball, gameState.paddle2)) {
+                reflect(gameState.paddle2, ball, true);
+            }
+
+            if (ball.velocity.x < 0.0 && collides(ball, gameState.paddle1)) {
+                reflect(gameState.paddle1, ball, false);
+            }
+
+            // Collision detect wall vs. bounds.
+            if (ball.velocity.x > 0.0 && ball.position.x >= dimensions.x - ball.size.x) {
+                ball.velocity.x *= -1.0;
+                gameState.score.a += 1;
+                if (gameState.score.a >= Constants.winScore) {
+                    gameEvents.gameComplete(gameState);
+                }
+                gameState.simulateBall = false;
+                setTimeout(function() { restoreBallState(gameState, false); }, 3000);
+            }
+            else if (ball.velocity.x < 0.0 && ball.position.x <= 0.0) {
+                ball.velocity.x *= -1.0;
+                gameState.score.b += 1;
+                if (gameState.score.b >= Constants.winScore) {
+                    gameEvents.gameComplete(gameState);
+                }
+                gameState.simulateBall = false;
+                setTimeout(function() { restoreBallState(gameState, true); }, 3000);
+            }
+
+            if ((ball.velocity.y > 0.0 && ball.position.y >= dimensions.y - ball.size.y) ||
+                (ball.velocity.y < 0.0 && ball.position.y <= 0.0)) {
+                ball.velocity.y *= -1.0;
+            }
+        }
     }
     else {
-        inputA = inputs.remote;
-        inputB = inputs.local;
-    }
-
-    // Update the paddle.
-    var newPos = inputA.y - gameState.paddle1.size.y / 2.0;
-    if (newPos <= 2.0) {
-        newPos = 2.0;
-    }
-    else if (newPos > dimensions.y - gameState.paddle1.size.y - 2.0) {
-        newPos = dimensions.y - gameState.paddle1.size.y - 2.0;
-    }
-    gameState.paddle1.position.y = newPos;
-
-
-    newPos = inputB.y - gameState.paddle2.size.y / 2.0;
-    if (newPos <= 2.0) {
-        newPos = 2.0;
-    }
-    else if (newPos > dimensions.y - gameState.paddle2.size.y - 2.0) {
-        newPos = dimensions.y - gameState.paddle2.size.y - 2.0;
-    }
-    gameState.paddle2.position.y = newPos;
-
-    // Update the ball.
-    if (gameState.simulateBall) {
-        var ball = gameState.ball;
-        ball.position.x = ball.position.x + ball.velocity.x * dt;
-        ball.position.y = ball.position.y + ball.velocity.y * dt;
-
-        if (ball.velocity.x > 0.0 && collides(ball, gameState.paddle2)) {
-            reflect(gameState.paddle2, ball, true);
+        // Client updating.
+        var newPos = inputs.local.y - gameState.paddle2.size.y / 2.0;
+        if (newPos <= 2.0) {
+            newPos = 2.0;
         }
+        else if (newPos > dimensions.y - gameState.paddle2.size.y - 2.0) {
+            newPos = dimensions.y - gameState.paddle2.size.y - 2.0;
+        }
+        gameState.paddle2.position.y = newPos;
 
-        if (ball.velocity.x < 0.0 && collides(ball, gameState.paddle1)) {
-            reflect(gameState.paddle1, ball, false);
-        }
-
-        // Collision detect wall vs. bounds.
-        if (ball.velocity.x > 0.0 && ball.position.x >= dimensions.x - ball.size.x) {
-            ball.velocity.x *= -1.0;
-            gameState.score.a += 1;
-            if (gameState.score.a >= Constants.winScore) {
-                gameEvents.gameComplete(gameState);
-            }
-            gameState.simulateBall = false;
-            setTimeout(function() { restoreBallState(gameState, false); }, 3000);
-        }
-        else if (ball.velocity.x < 0.0 && ball.position.x <= 0.0) {
-            ball.velocity.x *= -1.0;
-            gameState.score.b += 1;
-            if (gameState.score.b >= Constants.winScore) {
-                gameEvents.gameComplete(gameState);
-            }
-            gameState.simulateBall = false;
-            setTimeout(function() { restoreBallState(gameState, true); }, 3000);
-        }
-
-        if ((ball.velocity.y > 0.0 && ball.position.y >= dimensions.y - ball.size.y) ||
-            (ball.velocity.y < 0.0 && ball.position.y <= 0.0)) {
-            ball.velocity.y *= -1.0;
-        }
+        // Send the gamestate message with just the 2nd paddle position.
     }
 }
 
@@ -201,17 +194,13 @@ function packGameStateMessage(state) {
 
 /** Load the game state from the network message received */
 function unpackGameStateMessage(packed, state) {
-    state.paddle1.position = packed.paddle1;
-    state.paddle2.position = packed.paddle2;
-    state.ball.position = packed.ball;
-    state.score = packed.score;
-}
-
-/** Message data for transmitting input position */
-function packInputMessage(inputPos) {
-    return {
-        type: MessageType.InputTx,
-        payload: inputPos
+    if (state.role === Role.Client) {
+        state.paddle1.position = packed.paddle1;
+        state.ball.position = packed.ball;
+        state.score = packed.score;
+    }
+    else {
+        state.paddle2.position = packed.paddle2;
     }
 }
 
@@ -426,19 +415,10 @@ function drawBackground(context, dimensions) {
 
 /** The self-rescheduling  game loop for both host and client updates */
 function gameLoop(gameState, connection, inputs, dt, gameEvents) {
-    var message = null;
-    var messageData = null;
-    if (gameState.role == Role.Host) {
-        updateGameState(gameState, inputs, dt, gameEvents);
-        message = packGameStateMessage(gameState);
-        messageData = JSON.stringify(message);
-        connection.send(messageData);
-    }
-    else {
-        message = packInputMessage(inputs.local);
-        messageData = JSON.stringify(message);
-        connection.send(messageData);
-    }
+    updateGameState(gameState, inputs, dt, gameEvents);
+    var message = packGameStateMessage(gameState);
+    var messageData = JSON.stringify(message);
+    connection.send(messageData);
 }
 
 function setupInputContext() {
@@ -535,9 +515,6 @@ function runMatch(mid, inputContext, ws) {
         else if (message.type === MessageType.MatchStart) {
             gameState.role = message.payload.role;
             startMatch();
-        }
-        else if (message.type === MessageType.InputTx) {
-            gameCallbacks.remoteInputUpdated(message.payload);
         }
         else if (message.type === MessageType.GameStateTx) {
             unpackGameStateMessage(message.payload, gameState);
