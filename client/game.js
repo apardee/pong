@@ -138,6 +138,13 @@ function reflect(paddle, ball, left) {
     var paddleY = paddle.position.y + paddle.size.y / 2.0;
     var ballY = ball.position.y + ball.size.y / 2.0;
     var ratio = (paddleY - ballY) / (paddle.size.y / 2.0);
+    
+    if (left) {
+        ball.position.x = paddle.position.x - ball.size.x;
+    }
+    else {
+        ball.position.x = paddle.position.x + paddle.size.x;
+    }
 
     var reflectAngle = maxReflect * Math.abs(ratio);
     ball.velocity.x = ballSpeed * Math.cos(reflectAngle);
