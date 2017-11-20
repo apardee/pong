@@ -1,0 +1,31 @@
+<html>
+    <head>
+        <title>TEST</title>
+        <script>
+            function log(message) {
+                var element = document.getElementById("output");
+                element.innerText += message;
+                element.innerText += "\n";
+            }
+            function startup() {
+                log("connection initializing...");
+                var sock = new WebSocket("ws://127.0.0.1:8888");
+                sock.onerror = function() {
+                    log("connection error...");
+                }
+                sock.onopen = function() {
+                    log("connection opened...");
+                }
+                sock.onclose = function() {
+                    log("connection closed...");
+                }
+                sock.onmessage = function(event) {
+                    log(event.data);
+                }
+            }
+        </script>
+    </head>
+    <body onload="startup();" style="background-color:black; color:white; font-family:monospace;">
+        <div id="output"></div>
+    </body>
+    </html>
