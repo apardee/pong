@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 func run(c *websocket.Conn) {
 	log.Println("Running connection...")
-	done := false
-	for !done {
-		select {
-		case <-time.After(1 * time.Second):
-			log.Println("Sending test message...")
-			if err := c.WriteMessage(websocket.BinaryMessage, []byte("test!")); err != nil {
-				done = true
-			}
+	for {
+		log.Println("reading the next message...")
+		_, byt, err := c.ReadMessage()
+		log.Printf("message length: %d\n", len(byt))
+		if err != nil {
+			log.Println("failed to read message, aborting connection...")
+			break
 		}
-
+		log.Println("relaying message back...")
+		if err := c.WriteMessage(websocket.BinaryMessage, byt); err != nil {
+			log.Println("failed to relay message, aborting connection...")
+			break
+		}
 	}
 	c.Close()
 }

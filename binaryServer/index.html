@@ -20,8 +20,32 @@
                     log("connection closed...");
                 }
                 sock.onmessage = function(event) {
-                    log(event.data);
+                    // log(event.data.readAsText());
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        var dv = new DataView(reader.result);
+                        var byte = dv.getUint8(0);
+                        var num1 = dv.getFloat32(1);
+                        var num2 = dv.getFloat32(5);
+                        log(byte.toString());
+                        log(num1.toString());
+                        log(num2.toString());
+                    }
+                    reader.readAsArrayBuffer(event.data);
                 }
+
+                var interval = setInterval(function() {
+                    if (sock.readyState === sock.CLOSED) {
+                        clearInterval(interval);
+                    } else {
+                        var arr = new ArrayBuffer(9);
+                        var dv = new DataView(arr);
+                        dv.setUint8(0, 8);
+                        dv.setFloat32(1, 1234.5678);
+                        dv.setFloat32(5, 9876.54321);
+                        sock.send(dv.buffer);
+                    }
+                }, 1000);
             }
         </script>
     </head>
