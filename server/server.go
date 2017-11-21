@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -35,6 +38,16 @@ type match struct {
 	hostConn   *websocket.Conn
 	mid        string
 	clientChan chan *websocket.Conn
+}
+
+type matchIDMessage struct {
+	MessageType uint8
+	Mid         uint32
+}
+
+type matchStartMessage struct {
+	MessageType uint8
+	Role        uint8
 }
 
 var mm *matchMaker
@@ -76,10 +89,21 @@ func runMatch(m *match) {
 	defer m.hostConn.Close()
 	var client *websocket.Conn
 
-	matchIDMessage := fmt.Sprintf("{ \"type\": \"MatchId\", \"payload\": { \"mid\": \"%s\" } }", m.mid)
-	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(matchIDMessage)); err != nil {
+	mid, err := strconv.Atoi(m.mid)
+	if err != nil {
+		log.Printf("Failed to convert the match id, match failed...")
 		cancel()
 		return
+	}
+
+	{
+		buf := &bytes.Buffer{}
+		binary.Write(buf, binary.BigEndian, matchIDMessage{1, uint32(mid)}) // TODO: make that message type a constant
+		if err := m.hostConn.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
+			log.Printf("Failed to write the match id message...")
+			cancel()
+			return
+		}
 	}
 
 	// For now, the host waits for the client.
@@ -101,13 +125,20 @@ func runMatch(m *match) {
 	log.Println("Client found, starting match...")
 
 	// Kick off the match by sending the `MatchStart` message through both connections.
-	hostStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Host\" } }"
-	clientStart := "{ \"type\": \"MatchStart\", \"payload\": { \"role\": \"Client\" } }"
-	if err := m.hostConn.WriteMessage(websocket.TextMessage, []byte(hostStart)); err != nil {
-		cancel()
+	{
+		buf := &bytes.Buffer{}
+		binary.Write(buf, binary.BigEndian, matchStartMessage{2, 1})
+		if err := m.hostConn.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
+			cancel()
+		}
 	}
-	if err := client.WriteMessage(websocket.TextMessage, []byte(clientStart)); err != nil {
-		cancel()
+
+	{
+		buf := &bytes.Buffer{}
+		binary.Write(buf, binary.BigEndian, matchStartMessage{2, 2})
+		if err := client.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
+			cancel()
+		}
 	}
 
 	clientRead := make(chan []byte)
