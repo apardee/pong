@@ -7,11 +7,11 @@ function log(message) {
 }
 
 var MessageType = {
-    MatchId: "MatchId",
-    MatchStart: "MatchStart",
-    MatchComplete: "MatchComplete",
-    GameStateTx: "GameStateTx",
-    RematchReady: "RematchReady",
+    MatchId: 1,
+    MatchStart: 2,
+    MatchComplete: 3,
+    GameStateTx: 4,
+    RematchReady: 5,
 };
 
 var State = {
@@ -21,9 +21,9 @@ var State = {
 };
 
 var Role = {
-    Unassigned: "Unassigned",
-    Host: "Host",
-    Client: "Client"
+    Unassigned: 0,
+    Host: 1,
+    Client: 2
 };
 
 function Vector(x, y) {
@@ -38,7 +38,7 @@ var Constants = {
     ballSpeed: 50,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
-    winScore: 5,
+    winScore: 1,
     midAttr: "mid"
 }
 
@@ -187,27 +187,24 @@ function collides(obj1, obj2) {
 }
 
 /** Reflect the current game state to be sent over the wire */
-function packGameStateMessage(state) {
+function buildGameStateMessage(state) {
     return {
-        type: MessageType.GameStateTx,
-        payload: {
-            paddle1: state.paddle1.position,
-            paddle2: state.paddle2.position,
-            ball: state.ball.position,
-            score: state.score,
-        }
+        paddle1: state.paddle1.position,
+        paddle2: state.paddle2.position,
+        ball: state.ball.position,
+        score: state.score,
     }
 }
 
 /** Load the game state from the network message received */
-function unpackGameStateMessage(packed, state) {
+function applyGameStateMessage(message, state) {
     if (state.role === Role.Client) {
-        state.paddle1.position = packed.paddle1;
-        state.ball.position = packed.ball;
-        state.score = packed.score;
+        state.paddle1.position = message.paddle1;
+        state.ball.position = message.ball;
+        state.score = message.score;
     }
     else {
-        state.paddle2.position = packed.paddle2;
+        state.paddle2.position = message.paddle2;
     }
 }
 
@@ -423,8 +420,8 @@ function drawBackground(context, dimensions) {
 /** The self-rescheduling  game loop for both host and client updates */
 function gameLoop(gameState, connection, inputs, dt, gameEvents) {
     updateGameState(gameState, inputs, dt, gameEvents);
-    var message = packGameStateMessage(gameState);
-    var messageData = JSON.stringify(message);
+    var message = buildGameStateMessage(gameState);
+    var messageData = packGameStateMessage(message);
     connection.send(messageData);
 }
 
@@ -462,6 +459,109 @@ function startup() {
     }
 }
 
+/**  */
+function packMidMessage(message) {
+    var buffer = new ArrayBuffer(5);
+    var dv = new DataView(buffer);
+    dv.setUint8(0, MessageType.MatchId);
+    dv.setUint32(1, message.mid);
+    return buffer;
+}
+
+/** */
+function unpackMidMessage(dv) {
+    var mid = dv.getUint32(1);
+    return {
+        mid: mid
+    }
+}
+
+/**  */
+function packMatchStartMessage(message) {
+    var buffer = new ArrayBuffer(2);
+    var dv = new DataView(buffer);
+    dv.setUint8(0, MessageType.MatchStart);
+    dv.setUint8(1, message.role);
+    return buffer;
+}
+
+/** */
+function unpackMatchStartMessage(dv) {
+    var role = dv.getUint8(1);
+    return {
+        role: role
+    }
+}
+
+/**  */
+function packGameStateMessage(message) {
+    var buffer = new ArrayBuffer(8 * 3 + 3);
+    var dv = new DataView(buffer);
+
+    var offset = 0;
+    dv.setUint8(offset, MessageType.GameStateTx); offset += 1;
+    dv.setFloat32(offset, message.paddle1.x); offset += 4;
+    dv.setFloat32(offset, message.paddle1.y); offset += 4;
+    dv.setFloat32(offset, message.paddle2.x); offset += 4;
+    dv.setFloat32(offset, message.paddle2.y); offset += 4;
+    dv.setFloat32(offset, message.ball.x); offset += 4;
+    dv.setFloat32(offset, message.ball.y); offset += 4;
+    dv.setUint8(offset, message.score.a); offset += 1;
+    dv.setUint8(offset, message.score.b); offset += 1;
+
+    return buffer;
+}
+
+/**  */
+function unpackGameStateMessage(dv) {
+    var paddle1 = { x: 0.0, y: 0.0 };
+    var paddle2 = { x: 0.0, y: 0.0 };
+    var ball = { x: 0.0, y: 0.0 };
+    var score = { a: 0, b: 0 };
+
+    var offset = 1;
+    paddle1.x = dv.getFloat32(offset); offset += 4;
+    paddle1.y = dv.getFloat32(offset); offset += 4;
+    paddle2.x = dv.getFloat32(offset); offset += 4;
+    paddle2.y = dv.getFloat32(offset); offset += 4;
+    ball.x = dv.getFloat32(offset); offset += 4;
+    ball.y = dv.getFloat32(offset); offset += 4;
+    score.a = dv.getUint8(offset); offset += 1;
+    score.b = dv.getUint8(offset); offset += 1;
+
+    return {
+        paddle1: paddle1,
+        paddle2: paddle2,
+        ball: ball,
+        score: score
+    }
+}
+
+/**  */
+function packMatchCompleteMessage() {
+    var buffer = new ArrayBuffer(1);
+    var dv = new DataView(buffer);
+    dv.setUint8(0, MessageType.MatchComplete);
+    return buffer;
+}
+
+/**  */
+function unpackRematchMessage(dv) {
+    var ready = dv.getUint8(1);
+    return {
+        ready: ready
+    }
+}
+
+/**  */
+function packRematchMessage(message) {
+    var buffer = new ArrayBuffer(2);
+    var dv = new DataView(buffer);
+    dv.setUint8(0, MessageType.RematchReady);
+    dv.setUint8(1, message.ready);
+    return buffer;
+}
+
 /** Initialize comms, establish the role of this instance of the game, and kick off the match */
 function runMatch(mid, inputContext, ws) {
     // Callbacks to the match UI.
@@ -496,9 +596,7 @@ function runMatch(mid, inputContext, ws) {
         var game = runGame(gameState, ws, gameCallbacks);
         game.gameComplete = function() {
             matchCallbacks.matchEnded({connection: ws, role: gameState.role});
-            var messageData = JSON.stringify({
-                type: MessageType.MatchComplete
-            });
+            var messageData = packMatchCompleteMessage();
             ws.send(messageData);
         }
     }
@@ -514,21 +612,28 @@ function runMatch(mid, inputContext, ws) {
         gameCallbacks.connectionClosed();
     }
     ws.onmessage = function(event) {
-        // log("rx: " + event.data);
-        var message = JSON.parse(event.data);
-        if (message.type === MessageType.MatchId) {
-            matchCallbacks.midReceived(message.payload.mid);
+        var reader = new FileReader();
+        reader.onload = function() {
+            var dataView = new DataView(reader.result);
+            var messageType = dataView.getUint8(0);
+            if (messageType === MessageType.MatchId) {
+                var message = unpackMidMessage(dataView);
+                matchCallbacks.midReceived(message.mid);
+            }
+            else if (messageType === MessageType.MatchStart) {
+                var message = unpackMatchStartMessage(dataView);
+                gameState.role = message.role;
+                startMatch();
+            }
+            else if (messageType === MessageType.GameStateTx) {
+                var message = unpackGameStateMessage(dataView);
+                applyGameStateMessage(message, gameState);
+            }
+            else if (messageType == MessageType.MatchComplete) {
+                matchCallbacks.matchEnded({connection: ws, role: gameState.role});
+            }
         }
-        else if (message.type === MessageType.MatchStart) {
-            gameState.role = message.payload.role;
-            startMatch();
-        }
-        else if (message.type === MessageType.GameStateTx) {
-            unpackGameStateMessage(message.payload, gameState);
-        }
-        else if (message.type == MessageType.MatchComplete) {
-            matchCallbacks.matchEnded({connection: ws, role: gameState.role});
-        }
+        reader.readAsArrayBuffer(event.data);
     }
 
     if (readyForStart) {
@@ -562,12 +667,9 @@ function showRematchOptions(inputContext, context) {
             // Start the match off.
             hostMatch(inputContext, context.connection);
             var startMessage = {
-                type: MessageType.MatchStart,
-                payload: {
-                    role: "Client"
-                }
+                role: Role.Client
             }
-            var messageData = JSON.stringify(startMessage);
+            var messageData = packMatchStartMessage(startMessage);
             context.connection.send(messageData);
             $("#interface").hide();
         }
@@ -576,12 +678,9 @@ function showRematchOptions(inputContext, context) {
     inputContext.rematchReadyPressed = function() {
         ready = !ready;
         var readyMessage = {
-            type: MessageType.RematchReady,
-            payload: {
-                ready: ready
-            }
+            ready: ready
         };
-        var messageData = JSON.stringify(readyMessage);
+        var messageData = packRematchMessage(readyMessage);
         context.connection.send(messageData);
         evaluateStart();
     };
@@ -590,22 +689,28 @@ function showRematchOptions(inputContext, context) {
     var readyMessage = "Opponent Ready";
     $("#rematchOpponentReady").text(notReadyMessage);
     context.connection.onmessage = function(event) {
-        var message = JSON.parse(event.data);
-        if (message.type === MessageType.RematchReady) {
-            if (message.payload.ready) {
-                opponentReady = true;
-                $("#rematchOpponentReady").text(readyMessage);
-            } else {
-                opponentReady = false;
-                $("#rematchOpponentReady").text(notReadyMessage);
+        var reader = new FileReader();
+        reader.onload = function() {
+            var dataView = new DataView(reader.result);
+            var messageType = dataView.getUint8(0);
+            if (messageType === MessageType.RematchReady) {
+                var rematch = unpackRematchMessage(dataView);
+                if (rematch) {
+                    opponentReady = true;
+                    $("#rematchOpponentReady").text(readyMessage);
+                } else {
+                    opponentReady = false;
+                    $("#rematchOpponentReady").text(notReadyMessage);
+                }
+                evaluateStart();
             }
-            evaluateStart();
+            else if (messageType === MessageType.MatchStart) {
+                // If the client receives the match start, kick off the new match.
+                joinMatch("existing", inputContext, context.connection);
+                $("#interface").hide();
+            }
         }
-        else if (message.type === MessageType.MatchStart) {
-            // If the client receives the match start, kick off the new match.
-            joinMatch("existing", inputContext, context.connection);
-            $("#interface").hide();
-        }
+        reader.readAsArrayBuffer(event.data);
     };
 }
 
