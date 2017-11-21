@@ -38,7 +38,7 @@ var Constants = {
     ballSpeed: 50,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
-    winScore: 5,
+    winScore: 1,
     midAttr: "mid"
 }
 
@@ -495,7 +495,7 @@ function unpackMatchStartMessage(dv) {
 
 /**  */
 function packGameStateMessage(message) {
-    var buffer = new ArrayBuffer(8 * 4 + 3);
+    var buffer = new ArrayBuffer(8 * 3 + 3);
     var dv = new DataView(buffer);
 
     var offset = 0;
@@ -506,8 +506,8 @@ function packGameStateMessage(message) {
     dv.setFloat32(offset, message.paddle2.y); offset += 4;
     dv.setFloat32(offset, message.ball.x); offset += 4;
     dv.setFloat32(offset, message.ball.y); offset += 4;
-    dv.setFloat32(offset, message.score.a); offset += 1;
-    dv.setFloat32(offset, message.score.b); offset += 1;
+    dv.setUint8(offset, message.score.a); offset += 1;
+    dv.setUint8(offset, message.score.b); offset += 1;
 
     return buffer;
 }
@@ -527,7 +527,7 @@ function unpackGameStateMessage(dv) {
     ball.x = dv.getFloat32(offset); offset += 4;
     ball.y = dv.getFloat32(offset); offset += 4;
     score.a = dv.getUint8(offset); offset += 1;
-    score.a = dv.getUint8(offset); offset += 1;
+    score.b = dv.getUint8(offset); offset += 1;
 
     return {
         paddle1: paddle1,
@@ -546,7 +546,7 @@ function packMatchCompleteMessage() {
 }
 
 /**  */
-function unpackRematchMessage() {
+function unpackRematchMessage(dv) {
     var ready = dv.getUint8(1);
     return {
         ready: ready
@@ -689,22 +689,28 @@ function showRematchOptions(inputContext, context) {
     var readyMessage = "Opponent Ready";
     $("#rematchOpponentReady").text(notReadyMessage);
     context.connection.onmessage = function(event) {
-        var message = JSON.parse(event.data);
-        if (message.type === MessageType.RematchReady) {
-            if (message.payload.ready) {
-                opponentReady = true;
-                $("#rematchOpponentReady").text(readyMessage);
-            } else {
-                opponentReady = false;
-                $("#rematchOpponentReady").text(notReadyMessage);
+        var reader = new FileReader();
+        reader.onload = function() {
+            var dataView = new DataView(reader.result);
+            var messageType = dataView.getUint8(0);
+            if (messageType === MessageType.RematchReady) {
+                var rematch = unpackRematchMessage(dataView);
+                if (rematch) {
+                    opponentReady = true;
+                    $("#rematchOpponentReady").text(readyMessage);
+                } else {
+                    opponentReady = false;
+                    $("#rematchOpponentReady").text(notReadyMessage);
+                }
+                evaluateStart();
             }
-            evaluateStart();
+            else if (messageType === MessageType.MatchStart) {
+                // If the client receives the match start, kick off the new match.
+                joinMatch("existing", inputContext, context.connection);
+                $("#interface").hide();
+            }
         }
-        else if (message.type === MessageType.MatchStart) {
-            // If the client receives the match start, kick off the new match.
-            joinMatch("existing", inputContext, context.connection);
-            $("#interface").hide();
-        }
+        reader.readAsArrayBuffer(event.data);
     };
 }
 
