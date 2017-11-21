@@ -199,12 +199,12 @@ function buildGameStateMessage(state) {
 /** Load the game state from the network message received */
 function applyGameStateMessage(message, state) {
     if (state.role === Role.Client) {
-        state.paddle1.position = packed.paddle1;
-        state.ball.position = packed.ball;
-        state.score = packed.score;
+        state.paddle1.position = message.paddle1;
+        state.ball.position = message.ball;
+        state.score = message.score;
     }
     else {
-        state.paddle2.position = packed.paddle2;
+        state.paddle2.position = message.paddle2;
     }
 }
 
@@ -519,7 +519,6 @@ function unpackGameStateMessage(dv) {
     var ball = { x: 0.0, y: 0.0 };
     var score = { a: 0, b: 0 };
 
-    var dv = new DataView();
     var offset = 1;
     paddle1.x = dv.getFloat32(offset); offset += 4;
     paddle1.y = dv.getFloat32(offset); offset += 4;

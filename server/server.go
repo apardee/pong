@@ -152,11 +152,11 @@ func runMatch(m *match) {
 			finished = true
 			break
 		case byt := <-hostRead:
-			if err := client.WriteMessage(websocket.TextMessage, byt); err != nil {
+			if err := client.WriteMessage(websocket.BinaryMessage, byt); err != nil {
 				cancel()
 			}
 		case byt := <-clientRead:
-			if err := m.hostConn.WriteMessage(websocket.TextMessage, byt); err != nil {
+			if err := m.hostConn.WriteMessage(websocket.BinaryMessage, byt); err != nil {
 				cancel()
 			}
 		}
