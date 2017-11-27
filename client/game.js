@@ -35,7 +35,8 @@ function Vector(x, y) {
 
 var Constants = {
     dimensions: Vector(500.0, 360.0),
-    ballSpeed: 50,
+    initialBallSpeed: 150,
+    maxBallSpeed: 500,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
     winScore: 1,
@@ -57,6 +58,7 @@ function GameState(role, state) {
         paddle1: GameObject(Vector(10, 80), Vector(0, 0), Vector(10, 50)),
         paddle2: GameObject(Vector(Constants.dimensions.x - 16, 130), Vector(0, 0), Vector(10, 50)),
         ball: GameObject(Vector(0, 0), Vector(0.0, 0.0), Vector(10, 10)),
+        ballSpeed: 100,
         score: { a: 0, b: 0 },
         simulateBall: true
     };
@@ -83,11 +85,19 @@ function updateGameState(gameState, inputs, dt, gameEvents) {
             ball.position.y = ball.position.y + ball.velocity.y * dt;
 
             if (ball.velocity.x > 0.0 && collides(ball, gameState.paddle2)) {
-                reflect(gameState.paddle2, ball, true);
+                gameState.ballSpeed += 20;
+                if (gameState.ballSpeed > Constants.maxBallSpeed) {
+                    gameState.ballSpeed = Constants.maxBallSpeed;
+                }
+                reflect(gameState.paddle2, gameState.ballSpeed, ball, true);
             }
 
             if (ball.velocity.x < 0.0 && collides(ball, gameState.paddle1)) {
-                reflect(gameState.paddle1, ball, false);
+                gameState.ballSpeed += 20;
+                if (gameState.ballSpeed > Constants.maxBallSpeed) {
+                    gameState.ballSpeed = Constants.maxBallSpeed;
+                }
+                reflect(gameState.paddle1, gameState.ballSpeed, ball, false);
             }
 
             // Collision detect wall vs. bounds.
@@ -131,9 +141,8 @@ function updateGameState(gameState, inputs, dt, gameEvents) {
     }
 }
 
-function reflect(paddle, ball, left) {
+function reflect(paddle, ballSpeed, ball, left) {
     var maxReflect = Constants.maxReflect;
-    var ballSpeed = Constants.ballSpeed;
 
     var paddleY = paddle.position.y + paddle.size.y / 2.0;
     var ballY = ball.position.y + ball.size.y / 2.0;
@@ -159,13 +168,14 @@ function reflect(paddle, ball, left) {
 
 function restoreBallState(gameState, left) {
     var dimensions = Constants.dimensions;
-    var ballSpeed = Constants.ballSpeed;
+    var ballSpeed = Constants.initialBallSpeed;
 
     var vx = ballSpeed * Math.cos(Math.PI / 4.0);
     var vy = ballSpeed * Math.sin(Math.PI / 4.0);
     gameState.ball.position = Vector(dimensions.x / 2.0, dimensions.y * 0.3);
     gameState.ball.velocity = Vector(left ? -vx : vx, vy);
     gameState.simulateBall = true;
+    gameState.ballSpeed = ballSpeed;
 }
 
 function drawObject(context, object) {
