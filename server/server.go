@@ -216,7 +216,7 @@ func serveMatchRequests(mm *matchMaker) {
 			var mid string
 			mm.matchRequestLock.Lock()
 			for {
-				mid = fmt.Sprintf("%04d", rand.Intn(1000))
+				mid = fmt.Sprintf("%04d", rand.Intn(10000))
 				_, ok := mm.matchRequests[mid]
 				if !ok {
 					break

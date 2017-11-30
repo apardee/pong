@@ -39,7 +39,7 @@ var Constants = {
     maxBallSpeed: 500,
     maxReflect: Math.PI / 3.0,
     digitContext: BlockDigit.createContext(40, 80, 10),
-    winScore: 1,
+    winScore: 10,
     midAttr: "mid"
 }
 
@@ -316,8 +316,9 @@ function hostMatch(inputContext, connection) {
 
     var match = runMatch(null, inputContext, connection);
     match.midReceived = function(mid) {
+        var midVal = ("0000" + parseInt(mid)).slice(-4);
         $("#loadingIndicator").css("opacity", 0.0);
-        $("#hostAddress").text(mid);
+        $("#hostAddress").text(midVal);
         $("#hostAddress").show();
         stopLoadingIndicator(indicatorState);
     };
