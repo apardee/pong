@@ -592,7 +592,11 @@ function runMatch(mid, inputContext, ws) {
 
     var readyForStart = ws != null;
     if (ws == null) {
-        var gameUrl = "ws://127.0.0.1:8080/sock"; // TODO: build the relative path off of window.location
+        var loc = window.location
+        var gameUrl = "ws:";
+        gameUrl += "//" + loc.host;
+        gameUrl += loc.pathname + "sock";
+        alert(gameUrl);
         if (mid != null) {
             gameUrl = gameUrl + "?" + Constants.midAttr + "=" + mid;
         }
