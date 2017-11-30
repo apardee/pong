@@ -624,7 +624,6 @@ function runMatch(mid, inputContext, ws) {
     }
     ws.onclose = function(err) {
         if (hasError) {
-            alert(err.status);
             matchCallbacks.connectionError();
         }
         matchCallbacks.connectionClosed();
