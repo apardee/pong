@@ -611,13 +611,17 @@ function runMatch(mid, inputContext, ws) {
         }
     }
 
-    ws.onerror = function() {
-        matchCallbacks.connectionError();
-        gameCallbacks.connectionClosed();
+    var hasError = false;
+    ws.onerror = function(err) {
+        hasError = true;
     }
     ws.onopen = function() {
     }
-    ws.onclose = function() {
+    ws.onclose = function(err) {
+        if (hasError) {
+            alert(err.status);
+            matchCallbacks.connectionError();
+        }
         matchCallbacks.connectionClosed();
         gameCallbacks.connectionClosed();
     }

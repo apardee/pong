@@ -1,8 +1,5 @@
 package main
 
-// TODO: Log count of active matches (pending hosts & matches playing out)
-// TODO: Enforce a limit on the number of those matches
-
 import (
 	"bytes"
 	"context"
@@ -16,6 +13,8 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+const maxMatches = 32
 
 type matchRequest struct {
 	host bool
@@ -56,7 +55,7 @@ func (m *matchCounter) decrement() {
 type matchMaker struct {
 	connInput        chan *matchRequest
 	matchRequestLock sync.Mutex
-	matchRequests    map[string]*match // TODO: Wrap this in a match map type.
+	matchRequests    map[string]*match
 	counter          *matchCounter
 }
 
@@ -87,8 +86,9 @@ type matchStartMessage struct {
 
 var mm *matchMaker
 
+// runMatch handles the lifecycle of a hosted match, from client-pending through
+// match completion.
 func runMatch(m *match, counter *matchCounter) {
-	log.Println("Running a match...")
 	counter.increment()
 
 	// For the time being, we keep the connection open and await a pair.
@@ -127,17 +127,18 @@ func runMatch(m *match, counter *matchCounter) {
 
 	mid, err := strconv.Atoi(m.mid)
 	if err != nil {
-		log.Printf("Failed to convert the match id, match failed...")
+		log.Printf("Match aborted (%04d): failed to convert the match id, match failed\n", mid)
 		counter.decrement()
 		cancel()
 		return
 	}
 
+	log.Printf("Starting match %04d\n", mid)
 	{
 		buf := &bytes.Buffer{}
 		binary.Write(buf, binary.BigEndian, matchIDMessage{1, uint32(mid)}) // TODO: make that message type a constant
 		if err := m.hostConn.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
-			log.Printf("Failed to write the match id message...")
+			log.Printf("Match aborted (%04d): failed to write the match id message\n", mid)
 			counter.decrement()
 			cancel()
 			return
@@ -150,7 +151,7 @@ func runMatch(m *match, counter *matchCounter) {
 	for client == nil {
 		select {
 		case <-ctx.Done():
-			log.Println("Failed. Finished match...")
+			log.Printf("Match aborted (%04d): cancelled while awaiting client\n", mid)
 			counter.decrement()
 			cancel()
 			return
@@ -161,9 +162,8 @@ func runMatch(m *match, counter *matchCounter) {
 		}
 	}
 
-	log.Println("Client found, starting match...")
-
 	// Kick off the match by sending the `MatchStart` message through both connections.
+	log.Printf("Client found, starting match %04d...\n", mid)
 	{
 		buf := &bytes.Buffer{}
 		binary.Write(buf, binary.BigEndian, matchStartMessage{2, 1})
@@ -201,10 +201,12 @@ func runMatch(m *match, counter *matchCounter) {
 		}
 	}
 
-	log.Println("Match complete...")
 	counter.decrement()
+	log.Printf("Match completed (%04d), %d remaining\n", mid, counter.activeCount())
 }
 
+// serveMatchRequests receives websocket + match request info, pairs up host and client,
+// and runs the match via-runMatch.
 func serveMatchRequests(mm *matchMaker) {
 	// Host connections wait around here...
 	for {
@@ -234,35 +236,38 @@ func serveMatchRequests(mm *matchMaker) {
 			if ok {
 				m.clientChan <- request.conn
 			} else {
-				// TODO: Write an error back into the client socket.
+				request.conn.Close()
 			}
 		}
 	}
 }
 
+// receiveConnection handles incoming websocket connection requests, upgrading the connection
+// and passing them off to the connection input channel for further processing.
 func receiveConnection(w http.ResponseWriter, r *http.Request) {
-	log.Println("Received a request...")
-
+	log.Println("Handling match request")
 	var mid string
 	mids := r.URL.Query()["mid"]
 	if len(mids) > 0 {
 		mid = mids[0]
 		mm.matchRequestLock.Lock()
 		_, ok := mm.matchRequests[mid]
-		if !ok {
-			log.Println("No match found with the id requested")
-		}
 		mm.matchRequestLock.Unlock()
-
 		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("404 - No match found with the id requested"))
+			errString := "404 - No match found with the id requested"
+			http.Error(w, errString, http.StatusNotFound)
+			log.Println(errString)
 			return
 		}
 	} else {
-		// Enforce a limit on the number of active & pending matches
+		// Enforce a limit on the number of active & pending matches.
 		count := mm.counter.activeCount()
-		log.Printf("match count: %d\n", count)
+		if count >= maxMatches {
+			errString := "503 - Too many active matches. Try again soon."
+			http.Error(w, errString, http.StatusServiceUnavailable)
+			log.Println(errString)
+			return
+		}
 	}
 
 	upgrader := websocket.Upgrader{
@@ -273,20 +278,29 @@ func receiveConnection(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	log.Println("Upgrading websocket connection")
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print(err)
 	} else {
-		log.Println("Upgraded a request...")
+		log.Println("Successfully upgraded the request")
 		request := &matchRequest{host: mid == "", mid: mid, conn: conn}
 		mm.connInput <- request
 	}
 }
 
 func main() {
+	log.Println("Pong server starting up and serving matches...")
 	mm = newMatchMaker()
+
+	// Kick off the connection handling runloop.
 	go serveMatchRequests(mm)
+
+	// Serve websocket connection & match handling.
 	http.HandleFunc("/sock", receiveConnection)
+
+	// Serve the state resources along with match handling.
 	http.Handle("/", http.FileServer(http.Dir("./client")))
+
 	http.ListenAndServe(":8080", nil)
 }
