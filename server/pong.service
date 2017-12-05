@@ -5,9 +5,9 @@ After=network.target
 [Service]
 Type=simple
 User=pardee
-WorkingDirectory=/home/pardee/pong/server/pong
-ExecStart=/home/pardee/pong/server/pong
-Restart=on-abort
+WorkingDirectory=/home/pardee/pong
+ExecStart=/home/pardee/pong/server/server
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
