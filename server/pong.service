@@ -1,0 +1,13 @@
+[Unit]
+Description=Pong Server Service
+After=network.target
+
+[Service]
+Type=simple
+User=pardee
+WorkingDirectory=/home/pardee/pong/server/pong
+ExecStart=/home/pardee/pong/server/pong
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
