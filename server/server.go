@@ -15,6 +15,8 @@ import (
 )
 
 const maxMatches = 32
+const matchIDMessageId = 1
+const matchStartMessageId = 2
 
 type matchRequest struct {
 	host bool
@@ -136,7 +138,7 @@ func runMatch(m *match, counter *matchCounter) {
 	log.Printf("Starting match %04d\n", mid)
 	{
 		buf := &bytes.Buffer{}
-		binary.Write(buf, binary.BigEndian, matchIDMessage{1, uint32(mid)}) // TODO: make that message type a constant
+		binary.Write(buf, binary.BigEndian, matchIDMessage{matchIDMessageId, uint32(mid)})
 		if err := m.hostConn.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
 			log.Printf("Match aborted (%04d): failed to write the match id message\n", mid)
 			counter.decrement()
@@ -166,7 +168,7 @@ func runMatch(m *match, counter *matchCounter) {
 	log.Printf("Client found, starting match %04d...\n", mid)
 	{
 		buf := &bytes.Buffer{}
-		binary.Write(buf, binary.BigEndian, matchStartMessage{2, 1})
+		binary.Write(buf, binary.BigEndian, matchStartMessage{matchStartMessageId, 1})
 		if err := m.hostConn.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
 			cancel()
 		}
@@ -174,7 +176,7 @@ func runMatch(m *match, counter *matchCounter) {
 
 	{
 		buf := &bytes.Buffer{}
-		binary.Write(buf, binary.BigEndian, matchStartMessage{2, 2})
+		binary.Write(buf, binary.BigEndian, matchStartMessage{matchStartMessageId, 2})
 		if err := client.WriteMessage(websocket.BinaryMessage, buf.Bytes()); err != nil {
 			cancel()
 		}

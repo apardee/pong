@@ -596,7 +596,6 @@ function runMatch(mid, inputContext, ws) {
         var gameUrl = "ws:";
         gameUrl += "//" + loc.host;
         gameUrl += loc.pathname + "sock";
-        alert(gameUrl);
         if (mid != null) {
             gameUrl = gameUrl + "?" + Constants.midAttr + "=" + mid;
         }
