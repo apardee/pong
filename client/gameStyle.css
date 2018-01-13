@@ -1,7 +1,8 @@
 .button, .textEntry, .returnButton {
   color: white;
   background-color: rgba(0,0,0,0.0);
-  font:32pt Andale Mono;
+  font-size:32pt;
+  font-family:"Andale Mono", monospace;
   border:0;
   text-decoration: underline;
 }
@@ -36,15 +37,18 @@
 }
 
 .returnButton {
-  font:12pt Andale Mono;
+  font-size:12pt;
+  font-family:"Andale Mono", monospace;
 }
 
 .title {
-  font:20pt Andale Mono;
+  font-size:20pt;
+  font-family:"Andale Mono", monospace;
 }
 
 .message {
-  font:12pt Andale Mono;
+  font-size:12pt;
+  font-family:"Andale Mono", monospace;
 }
 
 .textEntry button {
