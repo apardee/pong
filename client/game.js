@@ -692,19 +692,26 @@ function showRematchOptions(inputContext, context) {
         }
     };
 
+    $("#rematchReadyButton").show();
+    $("#rematchSelfReady").text("");
     inputContext.rematchReadyPressed = function() {
-        ready = !ready;
+        ready = true;
         var readyMessage = {
             ready: ready
         };
+
+        if (ready) {
+            $("#rematchReadyButton").hide();
+            $("#rematchSelfReady").text("Ready for match, waiting for opponent...");
+        }
         var messageData = packRematchMessage(readyMessage);
         context.connection.send(messageData);
         evaluateStart();
     };
 
-    var notReadyMessage = "Opponent Not Yet Ready";
-    var readyMessage = "Opponent Ready";
-    $("#rematchOpponentReady").text(notReadyMessage);
+    var notReadyMessageOpponent = "Opponent Not Yet Ready";
+    var readyMessageOpponent = "Opponent Ready";
+    $("#rematchOpponentReady").text(notReadyMessageOpponent);
     context.connection.onmessage = function(event) {
         var reader = new FileReader();
         reader.onload = function() {
@@ -714,10 +721,10 @@ function showRematchOptions(inputContext, context) {
                 var rematch = unpackRematchMessage(dataView);
                 if (rematch) {
                     opponentReady = true;
-                    $("#rematchOpponentReady").text(readyMessage);
+                    $("#rematchOpponentReady").text(readyMessageOpponent);
                 } else {
                     opponentReady = false;
-                    $("#rematchOpponentReady").text(notReadyMessage);
+                    $("#rematchOpponentReady").text(notReadyMessageOpponent);
                 }
                 evaluateStart();
             }
