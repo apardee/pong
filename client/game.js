@@ -766,6 +766,17 @@ function runGame(gameState, connection, callbacks) {
         inputs.local = offsetForCanvas(pagePos, canvas);
     };
 
+    document.ontouchmove = function(event) {
+        if (event.touches.length >= 2) {
+            return;
+        }
+
+        var pagePos = Vector(event.pageX, event.pageY);
+        inputs.local = offsetForCanvas(pagePos, canvas);
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
     var gameInterval = 33.33;
     var runLoop = function() {
         if (gameActive) {
