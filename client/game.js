@@ -274,7 +274,6 @@ function runMenu(inputContext, message) {
 
     inputContext.returnPressed = function() {
         runMenu(inputContext);
-        log("return pressed!");
     };
 
     inputContext.hostPressed = function() {
